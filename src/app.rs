@@ -244,6 +244,8 @@ mod tests {
 
         assert!(html.contains("多域名网络测速"));
         assert!(html.contains("width: min(920px, 100%)"));
+        assert!(html.contains("@media (max-width: 720px)"));
+        assert!(!html.contains("@media (max-width: 860px)"));
         assert!(html.contains("loadConfig()"));
         assert!(html.contains("target-speed-value"));
         assert!(html.contains("target-row-progress"));
