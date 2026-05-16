@@ -217,5 +217,8 @@ mod tests {
 
         assert!(html.contains("多域名网络测速"));
         assert!(html.contains("loadConfig()"));
+        assert!(html.contains("target-speed-value"));
+        assert!(html.contains("target-progress-fill"));
+        assert!(html.contains("测速完成后显示在节点内"));
     }
 }

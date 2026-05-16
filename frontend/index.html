@@ -38,12 +38,8 @@
     }
 
     .layout {
-      width: min(980px, 100%);
+      width: min(1040px, 100%);
       margin: 0 auto;
-      display: grid;
-      grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr);
-      gap: 18px;
-      align-items: start;
     }
 
     .card {
@@ -53,8 +49,7 @@
       box-shadow: 0 8px 30px rgba(0, 0, 0, 4%);
     }
 
-    .main-card,
-    .side-card {
+    .main-card {
       padding: 20px;
     }
 
@@ -189,7 +184,7 @@
 
     .target-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
       gap: 12px;
       align-items: center;
       padding: 14px;
@@ -201,6 +196,11 @@
     .target-row.recommended {
       border-color: rgba(218, 119, 86, .55);
       box-shadow: 0 8px 22px rgba(218, 119, 86, .11);
+    }
+
+    .target-row.active {
+      border-color: var(--accent);
+      background: #fff7f1;
     }
 
     .target-name {
@@ -248,55 +248,53 @@
       font-size: .74rem;
     }
 
-    .speed-display {
-      margin: 16px 0 14px;
-      text-align: center;
+    .download-metric {
+      min-width: 104px;
+      text-align: right;
+      font-family: var(--mono-stack);
     }
 
-    .speed-value {
-      font-size: 4rem;
+    .download-metric strong {
+      display: block;
+      color: var(--accent);
+      font-size: 1.08rem;
       font-weight: 850;
-      line-height: 1;
-      letter-spacing: 0;
     }
 
-    .speed-unit {
-      margin-left: 5px;
+    .download-metric span {
       color: var(--text-sub);
-      font-size: 1rem;
-      font-weight: 600;
+      font-size: .74rem;
     }
 
-    .chart-wrapper {
-      width: 100%;
-      height: 120px;
-      margin-bottom: 16px;
+    .target-download-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px 14px;
+      align-items: center;
+      padding-top: 10px;
+      border-top: 1px dashed #eadfd7;
     }
 
-    canvas {
-      width: 100%;
-      height: 100%;
-    }
-
-    .progress-track {
-      height: 7px;
+    .target-progress-track {
+      height: 8px;
       overflow: hidden;
       border-radius: 999px;
       background: #eee9e4;
     }
 
-    .progress-fill {
+    .target-progress-fill {
       width: 0%;
       height: 100%;
       background: var(--accent);
       transition: width .12s;
     }
 
-    .download-meta {
+    .target-download-meta {
+      grid-column: 1 / -1;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
-      margin-top: 14px;
     }
 
     .meta-box {
@@ -318,11 +316,11 @@
     }
 
     .footer-status {
+      grid-column: 1 / -1;
       min-height: 1.3em;
-      margin-top: 14px;
       color: #999;
       font-size: .82rem;
-      text-align: center;
+      text-align: left;
     }
 
     .modal-overlay {
@@ -459,15 +457,20 @@
         padding: 14px;
       }
 
-      .layout {
-        grid-template-columns: 1fr;
+      .target-row {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+      }
+
+      .download-metric {
+        grid-column: 2 / 3;
       }
     }
 
     @media (max-width: 560px) {
       .topbar,
       .target-row,
-      .download-meta {
+      .target-download-panel,
+      .target-download-meta {
         grid-template-columns: 1fr;
       }
 
@@ -492,8 +495,9 @@
         text-align: left;
       }
 
-      .speed-value {
-        font-size: 3.35rem;
+      .download-metric {
+        grid-column: auto;
+        text-align: left;
       }
     }
   </style>
@@ -537,38 +541,6 @@
       </div>
       <div class="target-list" id="target-list"></div>
     </section>
-
-    <aside class="card side-card">
-      <div class="section-title" style="margin-top:0">
-        <h2>单线程下载测速</h2>
-        <span class="mini-status" id="active-target">未选择</span>
-      </div>
-      <div class="speed-display">
-        <span class="speed-value" id="dl-speed">0.0</span>
-        <span class="speed-unit">Mbps</span>
-      </div>
-      <div class="chart-wrapper">
-        <canvas id="speed-chart"></canvas>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="dl-progress"></div>
-      </div>
-      <div class="download-meta">
-        <div class="meta-box">
-          <span class="label">当前域名</span>
-          <strong id="meta-domain">-</strong>
-        </div>
-        <div class="meta-box">
-          <span class="label">已下载</span>
-          <strong id="meta-bytes">0 MB</strong>
-        </div>
-        <div class="meta-box">
-          <span class="label">保存状态</span>
-          <strong id="meta-save">未开始</strong>
-        </div>
-      </div>
-      <div class="footer-status" id="status-text"></div>
-    </aside>
   </main>
 
   <div class="modal-overlay" id="history-modal">
@@ -620,7 +592,6 @@
       activeTargetKey: null,
       currentClientIp: "",
       currentColos: new Map(),
-      speedHistory: [],
       isDownloading: false,
     };
 
@@ -640,23 +611,9 @@
       clientLocation: document.getElementById("client-location"),
       clientIsp: document.getElementById("client-isp"),
       coloInfo: document.getElementById("colo-info"),
-      activeTarget: document.getElementById("active-target"),
-      dlSpeed: document.getElementById("dl-speed"),
-      dlProgress: document.getElementById("dl-progress"),
-      metaDomain: document.getElementById("meta-domain"),
-      metaBytes: document.getElementById("meta-bytes"),
-      metaSave: document.getElementById("meta-save"),
-      statusText: document.getElementById("status-text"),
-      canvas: document.getElementById("speed-chart"),
     };
 
-    const ctx = els.canvas.getContext("2d");
-
     window.addEventListener("DOMContentLoaded", init);
-    window.addEventListener("resize", () => {
-      resizeCanvas();
-      drawChart();
-    });
 
     els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
     els.historyBtn.addEventListener("click", openHistory);
@@ -664,8 +621,6 @@
     els.queryHistoryBtn.addEventListener("click", loadHistory);
 
     async function init() {
-      resizeCanvas();
-      drawChart();
       await loadConfig();
       runLatencyRounds();
     }
@@ -675,18 +630,28 @@
         const response = await fetch("/api/config", { cache: "no-store" });
         if (!response.ok) throw new Error(`配置加载失败: ${response.status}`);
         state.targets = await response.json();
-        state.targetStates = new Map(state.targets.map(target => [target.key, {
-          samples: [],
-          stats: null,
-          status: "waiting",
-          error: "",
-        }]));
+        state.targetStates = new Map(state.targets.map(target => [target.key, createTargetState()]));
         renderHistoryDomainOptions();
         renderTargetList();
       } catch (error) {
         els.targetList.innerHTML = `<div class="empty-row">${escapeHtml(error.message)}</div>`;
         els.latencyStatus.textContent = "配置加载失败";
       }
+    }
+
+    function createTargetState() {
+      return {
+        samples: [],
+        stats: null,
+        status: "waiting",
+        error: "",
+        downloadStatus: "idle",
+        downloadSpeedMbps: null,
+        downloadProgress: 0,
+        downloadedBytes: 0,
+        saveStatus: "未开始",
+        downloadMessage: "",
+      };
     }
 
     async function runLatencyRounds() {
@@ -772,7 +737,6 @@
 
       state.isDownloading = true;
       state.activeTargetKey = targetKey;
-      state.speedHistory = [];
       let speedSamples = [];
       let smoothedSpeed = 0;
       let receivedBytes = 0;
@@ -781,7 +745,7 @@
       let savePromise = null;
       let savedRecord = null;
 
-      resetDownloadUi(target);
+      resetDownloadUi(targetKey);
       renderTargetList();
 
       const controller = new AbortController();
@@ -817,54 +781,51 @@
               ? instantSpeed
               : smoothedSpeed * (1 - SMOOTHING) + instantSpeed * SMOOTHING;
             speedSamples.push(smoothedSpeed);
-            state.speedHistory.push(smoothedSpeed);
-            if (state.speedHistory.length > 56) state.speedHistory.shift();
 
-            updateDownloadUi(smoothedSpeed, receivedBytes, progressRatio(elapsed, receivedBytes, contentLength));
-            drawChart();
+            updateDownloadUi(targetKey, smoothedSpeed, receivedBytes, progressRatio(elapsed, receivedBytes, contentLength));
             lastTime = now;
             lastBytes = receivedBytes;
           }
 
           const progress = progressRatio(elapsed, receivedBytes, contentLength);
           if (!savePromise && progress >= 0.5) {
-            els.metaSave.textContent = "半程保存中";
+            updateDownloadSaveStatus(targetKey, "半程保存中");
             savePromise = saveRunningResult(targetKey, stableSpeed(speedSamples));
           }
         }
 
         const finalSpeed = stableSpeed(speedSamples);
-        els.dlSpeed.textContent = finalSpeed.toFixed(1);
-        els.dlProgress.style.width = "100%";
-        els.statusText.textContent = "测速完成，正在保存记录";
+        updateDownloadUi(targetKey, finalSpeed, receivedBytes, 1);
+        updateDownloadMessage(targetKey, "测速完成，正在保存记录");
 
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
         await finalizeResult(targetKey, finalSpeed, "completed", savedRecord);
-        els.statusText.textContent = "测速完成";
-        els.metaSave.textContent = "已保存";
+        markDownloadCompleted(targetKey, finalSpeed, receivedBytes);
       } catch (error) {
         const message = error instanceof TypeError
           ? "下载失败：测速文件可能缺少跨域响应头"
           : error.message;
-        els.statusText.textContent = message;
+        updateDownloadMessage(targetKey, message);
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
         await finalizeResult(targetKey, stableSpeed(speedSamples), "failed", savedRecord).catch(() => {
-          els.metaSave.textContent = "保存失败";
+          updateDownloadSaveStatus(targetKey, "保存失败");
         });
+        markDownloadFailed(targetKey, stableSpeed(speedSamples), receivedBytes, message);
       } finally {
         controller.abort();
         state.isDownloading = false;
+        state.activeTargetKey = null;
         renderTargetList();
       }
     }
 
     async function saveRunningResult(targetKey, speed) {
       const saved = await saveResult(buildResultPayload(targetKey, speed, "running"));
-      els.metaSave.textContent = "半程已保存";
+      updateDownloadSaveStatus(targetKey, "半程已保存");
       return saved;
     }
 
@@ -954,9 +915,10 @@
         const targetState = state.targetStates.get(target.key);
         const stats = targetState?.stats;
         const isRecommended = target.key === recommendedKey;
+        const isActive = state.activeTargetKey === target.key;
         const disabled = state.isDownloading || targetState?.status === "failed";
-        const buttonText = targetState?.status === "failed" ? "不可用" : "开始测速";
-        return `<div class="target-row ${isRecommended ? "recommended" : ""}">
+        const buttonText = renderDownloadButtonText(targetState);
+        return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}">
           <div>
             <div class="target-name">
               ${escapeHtml(target.label)}
@@ -969,9 +931,73 @@
             <strong>${stats ? `${stats.median_ms.toFixed(0)} ms` : "-"}</strong>
             <span>${stats ? `min ${stats.min_ms.toFixed(0)} / ${stats.samples_ms.length} 次` : targetState?.error || "等待测试"}</span>
           </div>
+          <div class="download-metric">
+            <strong class="target-speed-value">${formatNodeSpeed(targetState)}</strong>
+            <span>${renderDownloadStateLabel(targetState)}</span>
+          </div>
           <button class="btn-primary" type="button" onclick="startDownloadTest('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
+          ${renderDownloadPanel(targetState)}
         </div>`;
       }).join("");
+    }
+
+    function renderDownloadPanel(targetState) {
+      if (!targetState || targetState.downloadStatus === "idle") return "";
+      const progress = Math.min(100, Math.max(0, targetState.downloadProgress * 100));
+      return `<div class="target-download-panel" aria-label="测速完成后显示在节点内">
+        <div class="target-progress-track">
+          <div class="target-progress-fill" style="width:${progress}%"></div>
+        </div>
+        <div class="download-metric">
+          <strong>${formatNodeSpeedValue(targetState)}</strong>
+          <span>Mbps</span>
+        </div>
+        <div class="target-download-meta">
+          <div class="meta-box">
+            <span class="label">已下载</span>
+            <strong>${formatBytes(targetState.downloadedBytes)}</strong>
+          </div>
+          <div class="meta-box">
+            <span class="label">保存状态</span>
+            <strong>${escapeHtml(targetState.saveStatus)}</strong>
+          </div>
+          <div class="meta-box">
+            <span class="label">测速状态</span>
+            <strong>${escapeHtml(renderDownloadStateLabel(targetState))}</strong>
+          </div>
+        </div>
+        <div class="footer-status">${escapeHtml(targetState.downloadMessage || " ")}</div>
+      </div>`;
+    }
+
+    function renderDownloadButtonText(targetState) {
+      if (!targetState || targetState.status === "failed") return "不可用";
+      if (targetState.downloadStatus === "running") return "测速中";
+      if (targetState.downloadStatus === "completed") return "重新测速";
+      if (targetState.downloadStatus === "failed") return "重试测速";
+      return "开始测速";
+    }
+
+    function renderDownloadStateLabel(targetState) {
+      if (!targetState) return "未测速";
+      if (targetState.downloadStatus === "running") return "测速中";
+      if (targetState.downloadStatus === "completed") return "已完成";
+      if (targetState.downloadStatus === "failed") return "失败";
+      return "未测速";
+    }
+
+    function formatNodeSpeed(targetState) {
+      if (!targetState || targetState.downloadSpeedMbps === null) return "-";
+      return `${formatNodeSpeedValue(targetState)} Mbps`;
+    }
+
+    function formatNodeSpeedValue(targetState) {
+      if (!targetState || targetState.downloadSpeedMbps === null) return "-";
+      return targetState.downloadSpeedMbps.toFixed(1);
+    }
+
+    function formatBytes(bytes) {
+      return `${((Number(bytes) || 0) / 1024 / 1024).toFixed(1)} MB`;
     }
 
     function renderTargetStatus(targetState) {
@@ -997,21 +1023,61 @@
       return ready[0].key;
     }
 
-    function resetDownloadUi(target) {
-      els.activeTarget.textContent = target.host;
-      els.metaDomain.textContent = target.host;
-      els.metaBytes.textContent = "0 MB";
-      els.metaSave.textContent = "未保存";
-      els.statusText.textContent = "测速中...";
-      els.dlSpeed.textContent = "0.0";
-      els.dlProgress.style.width = "0%";
-      drawChart();
+    function resetDownloadUi(targetKey) {
+      const targetState = state.targetStates.get(targetKey);
+      if (!targetState) return;
+      targetState.downloadStatus = "running";
+      targetState.downloadSpeedMbps = 0;
+      targetState.downloadProgress = 0;
+      targetState.downloadedBytes = 0;
+      targetState.saveStatus = "未保存";
+      targetState.downloadMessage = "测速中...";
     }
 
-    function updateDownloadUi(speed, bytes, progress) {
-      els.dlSpeed.textContent = speed.toFixed(1);
-      els.metaBytes.textContent = `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-      els.dlProgress.style.width = `${Math.min(100, progress * 100)}%`;
+    function updateDownloadUi(targetKey, speed, bytes, progress) {
+      const targetState = state.targetStates.get(targetKey);
+      if (!targetState) return;
+      targetState.downloadSpeedMbps = roundMetric(speed);
+      targetState.downloadedBytes = bytes;
+      targetState.downloadProgress = progress;
+      renderTargetList();
+    }
+
+    function updateDownloadSaveStatus(targetKey, saveStatus) {
+      const targetState = state.targetStates.get(targetKey);
+      if (!targetState) return;
+      targetState.saveStatus = saveStatus;
+      renderTargetList();
+    }
+
+    function updateDownloadMessage(targetKey, message) {
+      const targetState = state.targetStates.get(targetKey);
+      if (!targetState) return;
+      targetState.downloadMessage = message;
+      renderTargetList();
+    }
+
+    function markDownloadCompleted(targetKey, speed, bytes) {
+      const targetState = state.targetStates.get(targetKey);
+      if (!targetState) return;
+      targetState.downloadStatus = "completed";
+      targetState.downloadSpeedMbps = roundMetric(speed);
+      targetState.downloadedBytes = bytes;
+      targetState.downloadProgress = 1;
+      targetState.saveStatus = "已保存";
+      targetState.downloadMessage = "测速完成";
+      renderTargetList();
+    }
+
+    function markDownloadFailed(targetKey, speed, bytes, message) {
+      const targetState = state.targetStates.get(targetKey);
+      if (!targetState) return;
+      targetState.downloadStatus = "failed";
+      targetState.downloadSpeedMbps = roundMetric(speed);
+      targetState.downloadedBytes = bytes;
+      targetState.downloadProgress = Math.max(targetState.downloadProgress, 0);
+      targetState.downloadMessage = message;
+      renderTargetList();
     }
 
     function updateClientInfo() {
@@ -1057,42 +1123,6 @@
       const timeRatio = elapsed / DOWNLOAD_TEST_MS;
       const byteRatio = contentLength > 0 ? bytes / contentLength : 0;
       return Math.max(timeRatio, byteRatio);
-    }
-
-    function resizeCanvas() {
-      const ratio = window.devicePixelRatio || 1;
-      const box = els.canvas.getBoundingClientRect();
-      els.canvas.width = box.width * ratio;
-      els.canvas.height = box.height * ratio;
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    }
-
-    function drawChart() {
-      const width = els.canvas.getBoundingClientRect().width;
-      const height = els.canvas.getBoundingClientRect().height;
-      ctx.clearRect(0, 0, width, height);
-      if (state.speedHistory.length < 2) return;
-
-      const max = Math.max(...state.speedHistory, 10) * 1.2;
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, "rgba(218,119,86,.2)");
-      gradient.addColorStop(1, "rgba(218,119,86,0)");
-
-      ctx.beginPath();
-      ctx.strokeStyle = "#da7756";
-      ctx.lineWidth = 2.5;
-      ctx.lineJoin = "round";
-      state.speedHistory.forEach((speed, index) => {
-        const x = index / (state.speedHistory.length - 1) * width;
-        const y = height - speed / max * height;
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.lineTo(width, height);
-      ctx.lineTo(0, height);
-      ctx.fillStyle = gradient;
-      ctx.fill();
     }
 
     function toggleHistory(show) {
