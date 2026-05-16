@@ -24,6 +24,7 @@
 
     html {
       min-height: 100%;
+      scrollbar-gutter: stable;
     }
 
     body {
@@ -120,6 +121,32 @@
       color: #555;
       background: #fff;
       border: 1px solid #ddd6ce;
+    }
+
+    .history-fab {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      z-index: 90;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 46px;
+      min-height: 118px;
+      padding: 14px 10px;
+      border-radius: 999px;
+      color: #fff;
+      background: var(--accent);
+      box-shadow: 0 14px 30px rgba(218, 119, 86, .32);
+      writing-mode: vertical-rl;
+      line-height: 1.15;
+      letter-spacing: 0;
+      transform: translateY(-50%);
+    }
+
+    .history-fab:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-50%) translateX(-3px);
     }
 
     .info-group {
@@ -348,7 +375,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 24px;
       box-sizing: border-box;
       background: rgba(45, 39, 35, .34);
       opacity: 0;
@@ -366,20 +393,39 @@
       transition: opacity .18s ease;
     }
 
+    .modal-overlay.active .modal-content {
+      animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+    }
+
     .modal-overlay:focus {
       outline: none;
     }
 
     .modal-content {
-      width: min(980px, calc(100vw - 32px));
-      height: min(760px, calc(100dvh - 40px));
+      width: min(980px, calc(100vw - 48px));
+      height: min(760px, calc(100dvh - 48px));
+      box-sizing: border-box;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       background: #fff;
       border: 1px solid rgba(230, 225, 218, .9);
-      border-radius: 16px;
+      border-radius: 18px;
       box-shadow: 0 24px 70px rgba(45, 39, 35, .22);
+      transform: scale(0.95);
+      transform-origin: center;
+    }
+
+    @keyframes popIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
     }
 
     .modal-header,
@@ -553,6 +599,10 @@
     }
 
     @media (max-width: 640px) {
+      html {
+        scrollbar-gutter: auto;
+      }
+
       body {
         padding: 14px;
       }
@@ -591,13 +641,14 @@
       }
 
       .modal-overlay {
-        padding: 12px;
+        padding: 0;
       }
 
       .modal-content {
-        width: 100%;
-        height: min(760px, calc(100dvh - 24px));
-        border-radius: 14px;
+        width: 100vw;
+        height: 100dvh;
+        border-radius: 0;
+        border: none;
       }
 
       .history-toolbar {
@@ -618,6 +669,18 @@
         text-align: left;
       }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .modal-overlay,
+      .modal-content {
+        transition: none;
+      }
+
+      .modal-overlay.active .modal-content {
+        animation: none;
+        transform: scale(1);
+      }
+    }
   </style>
 </head>
 <body>
@@ -630,7 +693,6 @@
         </div>
         <div class="top-actions">
           <button class="btn-secondary" id="refresh-latency-btn" type="button">重测延迟</button>
-          <button class="btn-secondary" id="history-btn" type="button" aria-controls="history-modal" aria-expanded="false">测速记录</button>
         </div>
       </div>
 
@@ -656,6 +718,8 @@
       <div class="target-list" id="target-list"></div>
     </section>
   </main>
+
+  <button class="history-fab" id="history-btn" type="button" aria-controls="history-modal" aria-expanded="false" aria-label="打开测速记录">测速记录</button>
 
   <div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title" aria-hidden="true" tabindex="-1">
     <div class="modal-content history-shell">

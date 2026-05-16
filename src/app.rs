@@ -297,20 +297,37 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_use_stable_history_dialog() {
+    fn embedded_index_html_should_use_responsive_history_window() {
         let html = super::embedded_index_html();
 
         assert!(html.contains("role=\"dialog\""));
         assert!(html.contains("aria-modal=\"true\""));
         assert!(html.contains("history-shell"));
+        assert!(html.contains("class=\"history-fab\""));
+        assert!(html.contains("position: fixed"));
+        assert!(html.contains("right: 20px"));
+        assert!(html.contains("border-radius: 999px"));
         assert!(html.contains("class=\"history-toolbar\""));
         assert!(html.contains("class=\"history-status-pill"));
-        assert!(html.contains("height: min(760px, calc(100dvh - 40px))"));
+        assert!(html.contains("width: min(980px, calc(100vw - 48px))"));
+        assert!(html.contains("height: min(760px, calc(100dvh - 48px))"));
+        assert!(html.contains("      box-sizing: border-box;\n      overflow: hidden;"));
+        assert!(html.contains("scrollbar-gutter: stable"));
+        assert!(html.contains("@media (max-width: 640px)"));
+        assert!(html.contains("width: 100vw"));
+        assert!(html.contains("height: 100dvh"));
+        assert!(html.contains("        scrollbar-gutter: auto;"));
+        assert!(html.contains("        border: none;\n      }\n\n      .history-toolbar"));
+        assert!(html.contains("@keyframes popIn"));
+        assert!(html.contains("animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)"));
+        assert!(html.contains("transform: scale(0.95)"));
+        assert!(html.contains("transform: scale(1)"));
         assert!(html.contains(".modal-overlay:focus"));
         assert!(html.contains("id=\"close-history-btn\""));
         assert!(html.contains("els.closeHistoryBtn.addEventListener"));
         assert!(!html.contains("clip-path: circle"));
         assert!(!html.contains("backdrop-filter"));
-        assert!(!html.contains("class=\"history-fab\""));
+        assert!(!html.contains("history-bounce-in"));
+        assert!(!html.contains("<button class=\"btn-secondary\" id=\"history-btn\""));
     }
 }
