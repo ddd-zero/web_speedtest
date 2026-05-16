@@ -243,6 +243,7 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(html.contains("多域名网络测速"));
+        assert!(html.contains("width: min(920px, 100%)"));
         assert!(html.contains("loadConfig()"));
         assert!(html.contains("target-speed-value"));
         assert!(html.contains("target-row-progress"));
