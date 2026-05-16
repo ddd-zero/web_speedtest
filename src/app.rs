@@ -248,7 +248,12 @@ mod tests {
         assert!(html.contains("target-row-progress"));
         assert!(html.contains("target-colo"));
         assert!(html.contains("sortedTargetsForRender()"));
+        assert!(html.contains("COLO_PALETTE"));
+        assert!(html.contains("colorForColo(colo)"));
         assert!(html.contains("stopDownloadTest()"));
+        assert!(html.contains("patchDownloadRow(targetKey)"));
+        assert!(html.contains("renderDownloadStatusText(targetState)"));
+        assert!(!html.contains("target-download-strip"));
         assert!(html.contains("MAX_CONSECUTIVE_LATENCY_FAILURES = 3"));
         assert!(html.contains("consecutiveLatencyFailures"));
         assert!(html.contains("latencySkipped"));

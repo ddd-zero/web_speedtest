@@ -261,8 +261,9 @@
       align-items: center;
       border-radius: 999px;
       padding: 2px 7px;
-      color: #7a5546;
-      background: rgba(218, 119, 86, .13);
+      color: var(--colo-fg, #7a5546);
+      background: var(--colo-bg, rgba(218, 119, 86, .13));
+      box-shadow: inset 0 0 0 1px var(--colo-ring, rgba(218, 119, 86, .14));
       font-family: var(--mono-stack);
       font-size: .68rem;
       font-weight: 800;
@@ -310,16 +311,12 @@
     }
 
     .download-metric span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: var(--text-sub);
       font-size: .74rem;
-    }
-
-    .target-download-strip {
-      margin-top: 6px;
-      color: #9a8f86;
-      font-family: var(--mono-stack);
-      font-size: .72rem;
-      line-height: 1.35;
     }
 
     .modal-overlay {
@@ -580,6 +577,21 @@
   <script>
     const SMOOTHING = 0.3;
     const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
+    const COLO_PALETTE = [
+      { bg: "#eaf2ff", fg: "#205c9d", ring: "#c8ddfa" },
+      { bg: "#e7f6f0", fg: "#1d6f57", ring: "#bfe7d7" },
+      { bg: "#fff2cc", fg: "#8a5d00", ring: "#f4d98a" },
+      { bg: "#fcecef", fg: "#a83f55", ring: "#f3c3ce" },
+      { bg: "#eeeafd", fg: "#6750a4", ring: "#d8cff9" },
+      { bg: "#e4f7fb", fg: "#147187", ring: "#b9e7f0" },
+      { bg: "#f1f4f8", fg: "#506176", ring: "#d8e0ea" },
+      { bg: "#fff0e6", fg: "#a04e20", ring: "#f3c7ad" },
+      { bg: "#eaf7e8", fg: "#2f6f3e", ring: "#c8e8c1" },
+      { bg: "#f3ecff", fg: "#7b4ab8", ring: "#ddcbfb" },
+      { bg: "#e8f3f8", fg: "#315f7c", ring: "#c4ddea" },
+      { bg: "#fff1f4", fg: "#93405d", ring: "#efc8d4" },
+    ];
+    const assignedColoColorIndexes = new Map();
 
     const state = {
       targets: [],
@@ -953,7 +965,7 @@
         const disabled = (state.isDownloading && !isActive) || targetState?.status === "failed";
         const buttonText = renderDownloadButtonText(targetState);
         const progress = renderDownloadProgress(targetState);
-        return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}">
+        return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}" data-target-key="${escapeHtml(target.key)}">
           <div class="target-row-progress" style="width:${progress}%"></div>
           <div>
             <div class="target-name">
@@ -965,7 +977,6 @@
               <span>${escapeHtml(target.host)}</span>
               ${renderColoBadge(target.key)}
             </div>
-            ${renderDownloadStrip(targetState)}
           </div>
           <div class="metric">
             <strong>${stats ? `${stats.median_ms.toFixed(0)} ms` : "-"}</strong>
@@ -973,7 +984,7 @@
           </div>
           <div class="download-metric">
             <strong class="target-speed-value">${formatNodeSpeed(targetState)}</strong>
-            <span>${renderDownloadStateLabel(targetState)}</span>
+            <span class="target-download-status">${escapeHtml(renderDownloadStatusText(targetState))}</span>
           </div>
           <button class="btn-primary" type="button" onclick="startDownloadTest('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
         </div>`;
@@ -988,13 +999,39 @@
 
     function renderColoBadge(targetKey) {
       const colo = state.currentColos.get(targetKey);
-      return colo ? `<span class="target-colo">${escapeHtml(colo)}</span>` : "";
+      if (!colo) return "";
+      const color = colorForColo(colo);
+      return `<span class="target-colo" style="--colo-bg:${color.bg};--colo-fg:${color.fg};--colo-ring:${color.ring}">${escapeHtml(colo)}</span>`;
     }
 
-    function renderDownloadStrip(targetState) {
-      if (!targetState || targetState.downloadStatus === "idle") return "";
-      const message = targetState.downloadMessage ? ` · ${targetState.downloadMessage}` : "";
-      return `<div class="target-download-strip">${formatBytes(targetState.downloadedBytes)}${escapeHtml(message)}</div>`;
+    function colorForColo(colo) {
+      const key = String(colo || "").trim().toUpperCase();
+      if (!key) return COLO_PALETTE[0];
+      if (assignedColoColorIndexes.has(key)) {
+        return COLO_PALETTE[assignedColoColorIndexes.get(key)];
+      }
+
+      const usedIndexes = new Set(assignedColoColorIndexes.values());
+      const startIndex = hashString(key) % COLO_PALETTE.length;
+      let colorIndex = startIndex;
+      for (let offset = 0; offset < COLO_PALETTE.length; offset += 1) {
+        const candidate = (startIndex + offset) % COLO_PALETTE.length;
+        if (!usedIndexes.has(candidate)) {
+          colorIndex = candidate;
+          break;
+        }
+      }
+      assignedColoColorIndexes.set(key, colorIndex);
+      return COLO_PALETTE[colorIndex];
+    }
+
+    function hashString(value) {
+      let hash = 2166136261;
+      for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return hash >>> 0;
     }
 
     function renderDownloadButtonText(targetState) {
@@ -1011,6 +1048,16 @@
       if (targetState.downloadStatus === "completed") return "已完成";
       if (targetState.downloadStatus === "failed") return "失败";
       return "未测速";
+    }
+
+    function renderDownloadStatusText(targetState) {
+      if (!targetState || targetState.downloadStatus === "idle") return "未测速";
+      if (targetState.downloadStatus === "running") return `${formatBytes(targetState.downloadedBytes)} · 测速中`;
+      if (targetState.downloadStatus === "completed") return `${formatBytes(targetState.downloadedBytes)} · 已完成`;
+      if (targetState.downloadStatus === "failed") {
+        return targetState.downloadMessage ? targetState.downloadMessage : "失败";
+      }
+      return renderDownloadStateLabel(targetState);
     }
 
     function formatNodeSpeed(targetState) {
@@ -1078,20 +1125,39 @@
       targetState.downloadMessage = "测速中...";
     }
 
+    function findTargetRow(targetKey) {
+      return Array.from(els.targetList.querySelectorAll(".target-row"))
+        .find(row => row.dataset.targetKey === targetKey);
+    }
+
+    function patchDownloadRow(targetKey) {
+      const targetState = state.targetStates.get(targetKey);
+      const row = findTargetRow(targetKey);
+      if (!targetState || !row) return false;
+
+      const progress = row.querySelector(".target-row-progress");
+      const speed = row.querySelector(".target-speed-value");
+      const status = row.querySelector(".target-download-status");
+      if (progress) progress.style.width = `${renderDownloadProgress(targetState)}%`;
+      if (speed) speed.textContent = formatNodeSpeed(targetState);
+      if (status) status.textContent = renderDownloadStatusText(targetState);
+      return true;
+    }
+
     function updateDownloadUi(targetKey, speed, bytes, progress) {
       const targetState = state.targetStates.get(targetKey);
       if (!targetState) return;
       targetState.downloadSpeedMbps = roundMetric(speed);
       targetState.downloadedBytes = bytes;
       targetState.downloadProgress = progress;
-      renderTargetList();
+      if (!patchDownloadRow(targetKey)) renderTargetList();
     }
 
     function updateDownloadMessage(targetKey, message) {
       const targetState = state.targetStates.get(targetKey);
       if (!targetState) return;
       targetState.downloadMessage = message;
-      renderTargetList();
+      if (!patchDownloadRow(targetKey)) renderTargetList();
     }
 
     function markDownloadCompleted(targetKey, speed, bytes) {
