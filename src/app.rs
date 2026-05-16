@@ -10,7 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::TEST_TARGETS,
+    config::{ConfigError, RuntimeConfig, TestSettings, TestTarget},
     models::{LatencyStats, ResultStatus, SaveResultResponse},
     store::{QueryFilter, SaveResultInput, SpeedStore, StoreError},
 };
@@ -18,12 +18,17 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     store: SpeedStore,
+    config: RuntimeConfig,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error(transparent)]
     Store(#[from] StoreError),
+    #[error(transparent)]
+    Config(#[from] ConfigError),
+    #[error("未知测速线路: {0}")]
+    UnknownTarget(String),
     #[error("服务启动失败: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -36,12 +41,13 @@ struct ErrorResponse {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
-            Self::Store(StoreError::UnknownDomain(_))
-            | Self::Store(StoreError::MissingUpdateToken)
-            | Self::Store(StoreError::InvalidUpdateToken) => StatusCode::BAD_REQUEST,
+            Self::Store(StoreError::MissingUpdateToken)
+            | Self::Store(StoreError::InvalidUpdateToken)
+            | Self::UnknownTarget(_) => StatusCode::BAD_REQUEST,
             Self::Store(StoreError::Json(_))
             | Self::Store(StoreError::Database(_))
             | Self::Store(StoreError::LockPoisoned)
+            | Self::Config(_)
             | Self::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -78,27 +84,35 @@ pub struct ResultsQuery {
     pub limit: Option<usize>,
 }
 
-pub fn build_router(store: SpeedStore) -> Router {
-    let state = AppState { store };
+#[derive(Debug, Serialize)]
+pub struct ClientConfig {
+    pub targets: Vec<TestTarget>,
+    pub test: TestSettings,
+}
+
+pub fn build_router(store: SpeedStore, runtime_config: RuntimeConfig) -> Router {
+    let state = AppState {
+        store,
+        config: runtime_config,
+    };
     Router::new()
         .route("/", get(index))
-        .route("/api/config", get(config))
+        .route("/api/config", get(client_config))
         .route("/api/results", get(results).post(save_result))
         .with_state(state)
 }
 
 pub async fn serve() -> Result<(), AppError> {
-    let db_path = std::env::var("WEB_SPEED_DB")
+    let config_path = std::env::var("WEB_SPEED_CONFIG")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("speed_results.sqlite3"));
-    let bind_addr =
-        std::env::var("WEB_SPEED_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
-    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    let store = SpeedStore::open(db_path)?;
+        .unwrap_or_else(|_| PathBuf::from("config.toml"));
+    let config = RuntimeConfig::load(config_path)?;
+    let listener = tokio::net::TcpListener::bind(config.listen_addr()).await?;
+    let store = SpeedStore::open(&config.database.path)?;
 
     axum::serve(
         listener,
-        build_router(store).into_make_service_with_connect_info::<SocketAddr>(),
+        build_router(store, config).into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())
@@ -108,8 +122,11 @@ async fn index() -> Html<&'static str> {
     Html(embedded_index_html())
 }
 
-async fn config() -> Json<&'static [crate::config::TestTarget]> {
-    Json(TEST_TARGETS)
+async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
+    Json(ClientConfig {
+        targets: state.config.targets.clone(),
+        test: state.config.test.clone(),
+    })
 }
 
 pub fn embedded_index_html() -> &'static str {
@@ -122,11 +139,21 @@ async fn save_result(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(payload): Json<SaveResultRequest>,
 ) -> Result<Json<SaveResultResponse>, AppError> {
+    let target = state
+        .config
+        .targets
+        .iter()
+        .find(|target| target.key == payload.domain_key)
+        .cloned()
+        .ok_or_else(|| AppError::UnknownTarget(payload.domain_key.clone()))?;
     let client_ip = extract_client_ip(&headers, addr, payload.client_ip.as_deref());
     let input = SaveResultInput {
         id: payload.id,
         update_token: payload.update_token,
-        domain_key: payload.domain_key,
+        domain_key: target.key,
+        domain_host: target.host,
+        trace_url: target.trace_url,
+        download_url: target.download_url,
         https_latency: payload.https_latency,
         partial_download_mbps: payload.partial_download_mbps,
         final_download_mbps: payload.final_download_mbps,
@@ -220,5 +247,8 @@ mod tests {
         assert!(html.contains("target-speed-value"));
         assert!(html.contains("target-progress-fill"));
         assert!(html.contains("测速完成后显示在节点内"));
+        assert!(html.contains("stopDownloadTest()"));
+        assert!(html.contains("progress_save_ratio"));
+        assert!(!html.contains("searchParams.set(\"_\""));
     }
 }

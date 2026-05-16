@@ -1,0 +1,99 @@
+[server]
+host = "127.0.0.1"
+port = 3000
+
+[database]
+path = "speed_results.sqlite3"
+
+[test]
+latency_rounds = 5
+latency_timeout_ms = 3500
+download_test_ms = 8500
+progress_save_ratio = 0.5
+
+[domains]
+external_yaml_path = "/opt/emby_ext_domains/config.yaml"
+
+[[domains.items]]
+name = "19931110 线路"
+url = "https://19931110.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a1 线路"
+url = "https://a1.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a2 线路"
+url = "https://a2.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a3 线路"
+url = "https://a3.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a4 线路"
+url = "https://a4.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a5 线路"
+url = "https://a5.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a6 线路"
+url = "https://a6.steinsgate.eu.org"
+
+[[domains.items]]
+name = "a7 线路"
+url = "https://a7.steinsgate.eu.org"
+
+[[domains.items]]
+name = "csssd 线路"
+url = "https://csssd.steinsgate.eu.org"
+
+[[domains.items]]
+name = "czkcdn 线路"
+url = "https://czkcdn.steinsgate.eu.org"
+
+[[domains.items]]
+name = "fisink 线路"
+url = "https://fisink.steinsgate.eu.org"
+
+[[domains.items]]
+name = "mfa 线路"
+url = "https://mfa.steinsgate.eu.org"
+
+[[domains.items]]
+name = "mofashi 线路"
+url = "https://mofashi.steinsgate.eu.org"
+
+[[domains.items]]
+name = "nexus 线路"
+url = "https://nexus.steinsgate.eu.org"
+
+[[domains.items]]
+name = "qms 线路"
+url = "https://qms.steinsgate.eu.org"
+
+[[domains.items]]
+name = "shopify 线路"
+url = "https://shopify.steinsgate.eu.org"
+
+[[domains.items]]
+name = "sinfan 线路"
+url = "https://sinfan.steinsgate.eu.org"
+
+[[domains.items]]
+name = "ubi 线路"
+url = "https://ubi.steinsgate.eu.org"
+
+[[domains.items]]
+name = "v6 线路"
+url = "https://v6.steinsgate.eu.org"
+
+[[domains.items]]
+name = "wetest 线路"
+url = "https://wetest.steinsgate.eu.org"
+
+[[domains.items]]
+name = "zhetengsha 线路"
+url = "https://zhetengsha.steinsgate.eu.org"

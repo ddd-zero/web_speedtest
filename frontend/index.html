@@ -179,17 +179,33 @@
 
     .target-list {
       display: grid;
+      gap: 6px;
+      max-height: 66vh;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .target-list-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 90px 110px 92px;
       gap: 10px;
+      align-items: center;
+      margin-bottom: 6px;
+      padding: 0 10px;
+      color: var(--text-sub);
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: 0;
     }
 
     .target-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto auto;
-      gap: 12px;
+      grid-template-columns: minmax(0, 1fr) 90px 110px 92px;
+      gap: 10px;
       align-items: center;
-      padding: 14px;
+      padding: 10px;
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 10px;
       background: #fffdf9;
     }
 
@@ -212,10 +228,10 @@
     }
 
     .target-host {
-      margin-top: 5px;
+      margin-top: 4px;
       color: var(--text-sub);
       font-family: var(--mono-stack);
-      font-size: .8rem;
+      font-size: .76rem;
       word-break: break-all;
     }
 
@@ -232,7 +248,6 @@
     }
 
     .metric {
-      min-width: 88px;
       text-align: right;
       font-family: var(--mono-stack);
     }
@@ -249,7 +264,6 @@
     }
 
     .download-metric {
-      min-width: 104px;
       text-align: right;
       font-family: var(--mono-stack);
     }
@@ -457,6 +471,10 @@
         padding: 14px;
       }
 
+      .target-list-header {
+        display: none;
+      }
+
       .target-row {
         grid-template-columns: minmax(0, 1fr) auto auto;
       }
@@ -581,18 +599,23 @@
   </div>
 
   <script>
-    const LATENCY_ROUNDS = 5;
-    const LATENCY_TIMEOUT_MS = 3500;
-    const DOWNLOAD_TEST_MS = 8500;
     const SMOOTHING = 0.3;
 
     const state = {
       targets: [],
+      test: {
+        latency_rounds: 5,
+        latency_timeout_ms: 3500,
+        download_test_ms: 8500,
+        progress_save_ratio: 0.5,
+      },
       targetStates: new Map(),
       activeTargetKey: null,
       currentClientIp: "",
       currentColos: new Map(),
       isDownloading: false,
+      downloadController: null,
+      stopRequested: false,
     };
 
     const els = {
@@ -629,7 +652,12 @@
       try {
         const response = await fetch("/api/config", { cache: "no-store" });
         if (!response.ok) throw new Error(`配置加载失败: ${response.status}`);
-        state.targets = await response.json();
+        const config = await response.json();
+        state.targets = config.targets || [];
+        state.test = {
+          ...state.test,
+          ...(config.test || {}),
+        };
         state.targetStates = new Map(state.targets.map(target => [target.key, createTargetState()]));
         renderHistoryDomainOptions();
         renderTargetList();
@@ -662,10 +690,10 @@
         targetState.status = "testing";
         targetState.error = "";
       });
-      els.latencyStatus.textContent = `延迟测试 0/${LATENCY_ROUNDS}`;
+      els.latencyStatus.textContent = `延迟测试 0/${state.test.latency_rounds}`;
       renderTargetList();
 
-      for (let round = 1; round <= LATENCY_ROUNDS; round += 1) {
+      for (let round = 1; round <= state.test.latency_rounds; round += 1) {
         await Promise.all(state.targets.map(async target => {
           const targetState = state.targetStates.get(target.key);
           const result = await measureHttpsLatency(target);
@@ -690,9 +718,9 @@
             targetState.stats = summarizeLatency(targetState.samples);
           }
         });
-        els.latencyStatus.textContent = `延迟测试 ${round}/${LATENCY_ROUNDS}`;
+        els.latencyStatus.textContent = `延迟测试 ${round}/${state.test.latency_rounds}`;
         renderTargetList();
-        if (round < LATENCY_ROUNDS) await sleep(140);
+        if (round < state.test.latency_rounds) await sleep(140);
       }
 
       state.targetStates.forEach(targetState => {
@@ -704,12 +732,10 @@
 
     async function measureHttpsLatency(target) {
       const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), LATENCY_TIMEOUT_MS);
+      const timer = window.setTimeout(() => controller.abort(), state.test.latency_timeout_ms);
       const started = performance.now();
       try {
-        const url = new URL(target.trace_url);
-        url.searchParams.set("_", `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-        const response = await fetch(url, {
+        const response = await fetch(target.trace_url, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -730,6 +756,10 @@
     }
 
     async function startDownloadTest(targetKey) {
+      if (state.isDownloading && state.activeTargetKey === targetKey) {
+        stopDownloadTest();
+        return;
+      }
       if (state.isDownloading) return;
       const target = state.targets.find(item => item.key === targetKey);
       const targetState = state.targetStates.get(targetKey);
@@ -737,6 +767,7 @@
 
       state.isDownloading = true;
       state.activeTargetKey = targetKey;
+      state.stopRequested = false;
       let speedSamples = [];
       let smoothedSpeed = 0;
       let receivedBytes = 0;
@@ -749,11 +780,10 @@
       renderTargetList();
 
       const controller = new AbortController();
+      state.downloadController = controller;
       const started = performance.now();
       try {
-        const downloadUrl = new URL(target.download_url);
-        downloadUrl.searchParams.set("_", `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-        const response = await fetch(downloadUrl, {
+        const response = await fetch(target.download_url, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -768,7 +798,7 @@
           const { done, value } = await reader.read();
           const now = performance.now();
           const elapsed = now - started;
-          if (elapsed >= DOWNLOAD_TEST_MS) {
+          if (elapsed >= state.test.download_test_ms) {
             await reader.cancel();
             break;
           }
@@ -788,7 +818,7 @@
           }
 
           const progress = progressRatio(elapsed, receivedBytes, contentLength);
-          if (!savePromise && progress >= 0.5) {
+          if (!savePromise && progress >= state.test.progress_save_ratio) {
             updateDownloadSaveStatus(targetKey, "半程保存中");
             savePromise = saveRunningResult(targetKey, stableSpeed(speedSamples));
           }
@@ -804,7 +834,9 @@
         await finalizeResult(targetKey, finalSpeed, "completed", savedRecord);
         markDownloadCompleted(targetKey, finalSpeed, receivedBytes);
       } catch (error) {
-        const message = error instanceof TypeError
+        const message = state.stopRequested
+          ? "测速已停止"
+          : error instanceof TypeError
           ? "下载失败：测速文件可能缺少跨域响应头"
           : error.message;
         updateDownloadMessage(targetKey, message);
@@ -819,8 +851,16 @@
         controller.abort();
         state.isDownloading = false;
         state.activeTargetKey = null;
+        state.downloadController = null;
+        state.stopRequested = false;
         renderTargetList();
       }
+    }
+
+    function stopDownloadTest() {
+      if (!state.downloadController) return;
+      state.stopRequested = true;
+      state.downloadController.abort();
     }
 
     async function saveRunningResult(targetKey, speed) {
@@ -911,12 +951,18 @@
 
     function renderTargetList() {
       const recommendedKey = findRecommendedTargetKey();
-      els.targetList.innerHTML = state.targets.map(target => {
+      const header = `<div class="target-list-header">
+        <span>线路</span>
+        <span style="text-align:right">HTTPS</span>
+        <span style="text-align:right">下载</span>
+        <span style="text-align:right">操作</span>
+      </div>`;
+      const rows = state.targets.map(target => {
         const targetState = state.targetStates.get(target.key);
         const stats = targetState?.stats;
         const isRecommended = target.key === recommendedKey;
         const isActive = state.activeTargetKey === target.key;
-        const disabled = state.isDownloading || targetState?.status === "failed";
+        const disabled = (state.isDownloading && !isActive) || targetState?.status === "failed";
         const buttonText = renderDownloadButtonText(targetState);
         return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}">
           <div>
@@ -939,6 +985,7 @@
           ${renderDownloadPanel(targetState)}
         </div>`;
       }).join("");
+      els.targetList.innerHTML = header + rows;
     }
 
     function renderDownloadPanel(targetState) {
@@ -972,7 +1019,7 @@
 
     function renderDownloadButtonText(targetState) {
       if (!targetState || targetState.status === "failed") return "不可用";
-      if (targetState.downloadStatus === "running") return "测速中";
+      if (targetState.downloadStatus === "running") return "停止测速";
       if (targetState.downloadStatus === "completed") return "重新测速";
       if (targetState.downloadStatus === "failed") return "重试测速";
       return "开始测速";
@@ -1120,7 +1167,7 @@
     }
 
     function progressRatio(elapsed, bytes, contentLength) {
-      const timeRatio = elapsed / DOWNLOAD_TEST_MS;
+      const timeRatio = elapsed / state.test.download_test_ms;
       const byteRatio = contentLength > 0 ? bytes / contentLength : 0;
       return Math.max(timeRatio, byteRatio);
     }

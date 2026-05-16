@@ -8,7 +8,6 @@ use rusqlite::{Connection, ToSql, params, params_from_iter};
 use uuid::Uuid;
 
 use crate::{
-    config::find_target,
     ip::mask_ip_for_public,
     models::{LatencyStats, PublicSpeedRecord, ResultStatus, SaveResultResponse},
 };
@@ -24,8 +23,6 @@ pub enum StoreError {
     Database(#[from] rusqlite::Error),
     #[error("JSON 序列化失败: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("未知测速域名: {0}")]
-    UnknownDomain(String),
     #[error("更新记录缺少更新令牌")]
     MissingUpdateToken,
     #[error("更新令牌无效")]
@@ -39,6 +36,9 @@ pub struct SaveResultInput {
     pub id: Option<i64>,
     pub update_token: Option<String>,
     pub domain_key: String,
+    pub domain_host: String,
+    pub trace_url: String,
+    pub download_url: String,
     pub https_latency: LatencyStats,
     pub partial_download_mbps: Option<f64>,
     pub final_download_mbps: Option<f64>,
@@ -111,30 +111,23 @@ impl SpeedStore {
     }
 
     pub fn save_result(&self, input: SaveResultInput) -> Result<SaveResultResponse, StoreError> {
-        let target = find_target(&input.domain_key)
-            .ok_or_else(|| StoreError::UnknownDomain(input.domain_key.clone()))?;
-
         match input.id {
             Some(id) => {
                 let token = input
                     .update_token
                     .clone()
                     .ok_or(StoreError::MissingUpdateToken)?;
-                self.update_result(id, &token, target, input)?;
+                self.update_result(id, &token, input)?;
                 Ok(SaveResultResponse {
                     id,
                     update_token: token,
                 })
             }
-            None => self.insert_result(target, input),
+            None => self.insert_result(input),
         }
     }
 
-    fn insert_result(
-        &self,
-        target: &crate::config::TestTarget,
-        input: SaveResultInput,
-    ) -> Result<SaveResultResponse, StoreError> {
+    fn insert_result(&self, input: SaveResultInput) -> Result<SaveResultResponse, StoreError> {
         let token = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
         let samples_json = serde_json::to_string(&input.https_latency.samples_ms)?;
@@ -153,10 +146,10 @@ impl SpeedStore {
             "#,
             params![
                 token,
-                target.key,
-                target.host,
-                target.trace_url,
-                target.download_url,
+                input.domain_key,
+                input.domain_host,
+                input.trace_url,
+                input.download_url,
                 input.https_latency.median_ms,
                 input.https_latency.min_ms,
                 input.https_latency.max_ms,
@@ -183,7 +176,6 @@ impl SpeedStore {
         &self,
         id: i64,
         token: &str,
-        target: &crate::config::TestTarget,
         input: SaveResultInput,
     ) -> Result<(), StoreError> {
         let now = Utc::now().to_rfc3339();
@@ -214,10 +206,10 @@ impl SpeedStore {
             params![
                 id,
                 token,
-                target.key,
-                target.host,
-                target.trace_url,
-                target.download_url,
+                input.domain_key,
+                input.domain_host,
+                input.trace_url,
+                input.download_url,
                 input.https_latency.median_ms,
                 input.https_latency.min_ms,
                 input.https_latency.max_ms,
@@ -325,6 +317,9 @@ mod tests {
             id: None,
             update_token: None,
             domain_key: "a1".to_string(),
+            domain_host: "a1.steinsgate.eu.org".to_string(),
+            trace_url: "https://a1.steinsgate.eu.org/cdn-cgi/trace".to_string(),
+            download_url: "https://a1.steinsgate.eu.org/200mb.test".to_string(),
             https_latency: LatencyStats {
                 median_ms: 42.0,
                 min_ms: 38.0,
