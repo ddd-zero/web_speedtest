@@ -297,6 +297,44 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_keep_main_page_scroll_locked_to_target_list() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("height: 100dvh;"),
+            "页面根容器应锁定到动态视口高度，避免 1920x921 等桌面视口出现外层滚动"
+        );
+        assert!(
+            html.contains("overflow: hidden;"),
+            "外层页面不应参与滚动，滚动应保留在测速列表内部"
+        );
+        assert!(
+            html.contains("display: flex;\n      flex-direction: column;\n      min-height: 0;"),
+            "主卡片应使用纵向 flex 布局，让列表吃掉剩余空间"
+        );
+        assert!(
+            html.contains("flex: 1 1 auto;\n      min-height: 0;\n      overflow: auto;"),
+            "测速列表应作为唯一滚动容器，并允许在 flex 容器内收缩"
+        );
+        assert!(
+            html.contains(".target-list {\n      display: flex;\n      flex-direction: column;"),
+            "测速列表容器应使用纵向 flex 堆叠行，避免父级 grid 隐式行高压缩测速行"
+        );
+        assert!(
+            !html.contains(".target-list {\n      display: grid;"),
+            "测速列表容器不应再作为父级 grid，否则行高可能低于测速行内部内容"
+        );
+        assert!(
+            html.contains(".target-list-header,\n    .target-row {\n      flex: 0 0 auto;"),
+            "列表表头和测速行不应在滚动容器内收缩，否则会压扁行高"
+        );
+        assert!(
+            !html.contains("max-height: 66vh;"),
+            "固定 66vh 未扣除标题和信息区高度，会导致页面整体超出视口"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_use_responsive_history_window() {
         let html = super::embedded_index_html();
 
