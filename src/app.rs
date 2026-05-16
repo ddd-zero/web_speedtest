@@ -105,11 +105,15 @@ pub async fn serve() -> Result<(), AppError> {
 }
 
 async fn index() -> Html<&'static str> {
-    Html(include_str!("../index.html"))
+    Html(embedded_index_html())
 }
 
 async fn config() -> Json<&'static [crate::config::TestTarget]> {
     Json(TEST_TARGETS)
+}
+
+pub fn embedded_index_html() -> &'static str {
+    include_str!("../frontend/index.html")
 }
 
 async fn save_result(
@@ -203,5 +207,15 @@ mod tests {
         let ip = extract_client_ip(&headers, socket, Some("bad-ip"));
 
         assert_eq!(ip, "10.0.0.2");
+    }
+
+    #[test]
+    fn embedded_index_html_should_be_loaded_from_frontend_dir() {
+        assert!(std::path::Path::new("frontend/index.html").is_file());
+
+        let html = super::embedded_index_html();
+
+        assert!(html.contains("多域名网络测速"));
+        assert!(html.contains("loadConfig()"));
     }
 }
