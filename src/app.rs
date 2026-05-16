@@ -244,6 +244,8 @@ mod tests {
 
         assert!(html.contains("多域名网络测速"));
         assert!(html.contains("width: min(920px, 100%)"));
+        assert!(html.contains("@media (max-width: 640px)"));
+        assert!(!html.contains("@media (max-width: 560px)"));
         assert!(!html.contains("@media (max-width: 720px)"));
         assert!(!html.contains("@media (max-width: 860px)"));
         assert!(html.contains("loadConfig()"));
@@ -279,6 +281,10 @@ mod tests {
         assert!(
             !html.contains("@media (max-width: 720px)"),
             "720px 是平板/窄桌面宽度，不应触发测速列表布局突变"
+        );
+        assert!(
+            html.contains("@media (max-width: 640px)"),
+            "640px 是顶部说明开始换行的位置，应直接切到手机单列布局"
         );
         assert!(
             html.contains("target-host-text"),
