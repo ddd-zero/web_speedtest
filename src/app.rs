@@ -249,6 +249,9 @@ mod tests {
         assert!(html.contains("target-colo"));
         assert!(html.contains("sortedTargetsForRender()"));
         assert!(html.contains("stopDownloadTest()"));
+        assert!(html.contains("MAX_CONSECUTIVE_LATENCY_FAILURES = 3"));
+        assert!(html.contains("consecutiveLatencyFailures"));
+        assert!(html.contains("latencySkipped"));
         assert!(html.contains("progress_save_ratio"));
         assert!(!html.contains("保存状态"));
         assert!(!html.contains("已保存"));

@@ -579,6 +579,7 @@
 
   <script>
     const SMOOTHING = 0.3;
+    const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
 
     const state = {
       targets: [],
@@ -651,6 +652,8 @@
         stats: null,
         status: "waiting",
         error: "",
+        consecutiveLatencyFailures: 0,
+        latencySkipped: false,
         downloadStatus: "idle",
         downloadSpeedMbps: null,
         downloadProgress: 0,
@@ -666,17 +669,24 @@
         targetState.stats = null;
         targetState.status = "testing";
         targetState.error = "";
+        targetState.consecutiveLatencyFailures = 0;
+        targetState.latencySkipped = false;
       });
+      state.currentColos.clear();
       els.latencyStatus.textContent = `延迟测试 0/${state.test.latency_rounds}`;
       renderTargetList();
 
       for (let round = 1; round <= state.test.latency_rounds; round += 1) {
         await Promise.all(state.targets.map(async target => {
           const targetState = state.targetStates.get(target.key);
+          if (!targetState || targetState.latencySkipped) return;
+
           const result = await measureHttpsLatency(target);
           if (result.ok) {
+            targetState.consecutiveLatencyFailures = 0;
             targetState.samples.push(result.ms);
             targetState.status = "testing";
+            targetState.error = "";
             if (result.trace.ip && !state.currentClientIp) {
               state.currentClientIp = result.trace.ip;
               updateClientInfo();
@@ -686,7 +696,14 @@
               updateClientInfo();
             }
           } else {
-            targetState.error = result.error;
+            targetState.consecutiveLatencyFailures += 1;
+            if (targetState.consecutiveLatencyFailures >= MAX_CONSECUTIVE_LATENCY_FAILURES) {
+              targetState.latencySkipped = true;
+              targetState.status = targetState.samples.length ? "ready" : "failed";
+              targetState.error = `连续失败 ${MAX_CONSECUTIVE_LATENCY_FAILURES} 次`;
+              return;
+            }
+            targetState.error = `${result.error} ${targetState.consecutiveLatencyFailures}/${MAX_CONSECUTIVE_LATENCY_FAILURES}`;
           }
         }));
 
