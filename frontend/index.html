@@ -37,6 +37,10 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    body.history-open {
+      overflow: hidden;
+    }
+
     .layout {
       width: min(920px, 100%);
       margin: 0 auto;
@@ -241,7 +245,20 @@
       align-items: center;
       gap: 8px;
       min-width: 0;
+      overflow: hidden;
       font-weight: 800;
+    }
+
+    .target-label-text,
+    .target-host-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .target-label-text {
+      flex: 0 1 auto;
     }
 
     .target-host {
@@ -254,6 +271,10 @@
       font-family: var(--mono-stack);
       font-size: .76rem;
       word-break: break-all;
+    }
+
+    .target-host-text {
+      flex: 1 1 auto;
     }
 
     .target-colo {
@@ -323,62 +344,86 @@
       position: fixed;
       inset: 0;
       z-index: 100;
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
       box-sizing: border-box;
-      background: rgba(0, 0, 0, .48);
-      backdrop-filter: blur(3px);
+      background: rgba(45, 39, 35, .34);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        opacity .2s ease,
+        visibility 0s linear .2s;
     }
 
     .modal-overlay.active {
-      display: flex;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity .18s ease;
+    }
+
+    .modal-overlay:focus {
+      outline: none;
     }
 
     .modal-content {
-      width: min(760px, 100%);
-      max-height: 86vh;
+      width: min(980px, calc(100vw - 32px));
+      height: min(760px, calc(100dvh - 40px));
       overflow: hidden;
       display: flex;
       flex-direction: column;
       background: #fff;
+      border: 1px solid rgba(230, 225, 218, .9);
       border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, .2);
+      box-shadow: 0 24px 70px rgba(45, 39, 35, .22);
     }
 
     .modal-header,
-    .search-bar {
+    .history-toolbar {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 16px 20px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid #eee7df;
       background: #fff;
     }
 
     .modal-header {
       justify-content: space-between;
+      padding: 18px 20px 16px;
     }
 
     .modal-title {
       margin: 0;
-      font-size: 1.18rem;
+      font-size: 1.12rem;
+      line-height: 1.2;
+    }
+
+    .history-subtitle {
+      margin-top: 4px;
+      color: var(--text-sub);
+      font-size: .78rem;
     }
 
     .close-btn {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       padding: 0;
-      color: #999;
-      background: transparent;
-      font-size: 1.8rem;
+      border-radius: 50%;
+      color: #777;
+      background: #f7f3ee;
+      border: 1px solid #eadfd7;
+      font-size: 1.5rem;
       line-height: 1;
     }
 
-    .search-bar {
-      flex-wrap: wrap;
-      background: #fafafa;
+    .history-toolbar {
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) minmax(132px, .75fr) minmax(220px, 1.35fr) auto;
+      padding: 14px 20px;
+      background: #fbfaf8;
     }
 
     .search-input,
@@ -394,13 +439,16 @@
     }
 
     .table-container {
+      flex: 1;
       overflow: auto;
+      background: #fff;
     }
 
     table {
       width: 100%;
-      min-width: 700px;
+      min-width: 780px;
       border-collapse: collapse;
+      table-layout: fixed;
       font-size: .84rem;
     }
 
@@ -408,17 +456,17 @@
       position: sticky;
       top: 0;
       z-index: 1;
-      padding: 12px 9px;
-      border-bottom: 1px solid #eee;
+      padding: 12px 12px;
+      border-bottom: 1px solid #eee7df;
       color: #888;
-      background: #fff;
+      background: #fffdf9;
       text-align: left;
       font-weight: 700;
       white-space: nowrap;
     }
 
     td {
-      padding: 10px 9px;
+      padding: 11px 12px;
       border-bottom: 1px solid #f3f0ec;
       color: #444;
       vertical-align: middle;
@@ -442,6 +490,61 @@
       white-space: nowrap;
     }
 
+    .history-domain-cell {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .history-domain-host {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .history-domain-key {
+      width: fit-content;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: #9c5c4d;
+      background: rgba(218, 119, 86, .12);
+      font-family: var(--mono-stack);
+      font-size: .72rem;
+      font-weight: 800;
+    }
+
+    .history-status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 58px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: .76rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .history-status-pill.completed {
+      color: #247247;
+      background: #e7f6ed;
+    }
+
+    .history-status-pill.failed {
+      color: #a44b3f;
+      background: #fbece8;
+    }
+
+    .history-status-pill.running {
+      color: #8a5d00;
+      background: #fff2cc;
+    }
+
     .empty-row {
       padding: 26px;
       color: #999;
@@ -458,11 +561,22 @@
       }
 
       .target-row {
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) 84px 100px 88px;
+        gap: 8px;
       }
 
-      .download-metric {
-        grid-column: 2 / 3;
+      .target-host {
+        flex-wrap: nowrap;
+        overflow: hidden;
+      }
+
+      .metric strong,
+      .download-metric strong {
+        font-size: .98rem;
+      }
+
+      .target-row button {
+        padding: 10px 12px;
       }
     }
 
@@ -483,6 +597,25 @@
       .top-actions button,
       .target-row button {
         width: 100%;
+      }
+
+      .modal-overlay {
+        padding: 12px;
+      }
+
+      .modal-content {
+        width: 100%;
+        height: min(760px, calc(100dvh - 24px));
+        border-radius: 14px;
+      }
+
+      .history-toolbar {
+        grid-template-columns: 1fr;
+        padding: 12px;
+      }
+
+      .modal-header {
+        padding: 14px 12px;
       }
 
       .target-row {
@@ -510,7 +643,7 @@
         </div>
         <div class="top-actions">
           <button class="btn-secondary" id="refresh-latency-btn" type="button">重测延迟</button>
-          <button class="btn-secondary" id="history-btn" type="button">测速记录</button>
+          <button class="btn-secondary" id="history-btn" type="button" aria-controls="history-modal" aria-expanded="false">测速记录</button>
         </div>
       </div>
 
@@ -537,13 +670,16 @@
     </section>
   </main>
 
-  <div class="modal-overlay" id="history-modal">
-    <div class="modal-content">
+  <div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title" aria-hidden="true" tabindex="-1">
+    <div class="modal-content history-shell">
       <div class="modal-header">
-        <h2 class="modal-title">测速记录</h2>
+        <div>
+          <h2 class="modal-title" id="history-title">测速记录</h2>
+          <div class="history-subtitle">按线路、状态或节点查询最近测速结果</div>
+        </div>
         <button class="close-btn" id="close-history-btn" type="button" aria-label="关闭">&times;</button>
       </div>
-      <div class="search-bar">
+      <div class="history-toolbar">
         <select id="history-domain" class="search-select">
           <option value="">全部域名</option>
         </select>
@@ -557,7 +693,15 @@
         <button class="btn-primary" id="query-history-btn" type="button">查询</button>
       </div>
       <div class="table-container">
-        <table>
+        <table class="history-table">
+          <colgroup>
+            <col style="width: 17%">
+            <col style="width: 30%">
+            <col style="width: 10%">
+            <col style="width: 10%">
+            <col style="width: 18%">
+            <col style="width: 15%">
+          </colgroup>
           <thead>
             <tr>
               <th>时间</th>
@@ -606,6 +750,7 @@
       currentClientIp: "",
       currentColos: new Map(),
       isDownloading: false,
+      isHistoryOpen: false,
       downloadController: null,
       stopRequested: false,
     };
@@ -632,7 +777,13 @@
     els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
     els.historyBtn.addEventListener("click", openHistory);
     els.closeHistoryBtn.addEventListener("click", () => toggleHistory(false));
+    els.historyModal.addEventListener("click", event => {
+      if (event.target === els.historyModal) toggleHistory(false);
+    });
     els.queryHistoryBtn.addEventListener("click", loadHistory);
+    window.addEventListener("keydown", event => {
+      if (event.key === "Escape" && state.isHistoryOpen) toggleHistory(false);
+    });
 
     async function init() {
       await loadConfig();
@@ -937,9 +1088,14 @@
           const speed = record.final_download_mbps ?? record.partial_download_mbps ?? 0;
           return `<tr>
             <td>${formatTime(record.created_at)}</td>
-            <td>${escapeHtml(record.domain_host)}<br><span class="badge">${escapeHtml(record.domain_key)}</span></td>
+            <td>
+              <div class="history-domain-cell">
+                <span class="history-domain-host">${escapeHtml(record.domain_host)}</span>
+                <span class="history-domain-key">${escapeHtml(record.domain_key)}</span>
+              </div>
+            </td>
             <td class="col-latency">${formatLatency(record.https_latency_median_ms)}</td>
-            <td>${formatStatus(record.status)}</td>
+            <td>${renderHistoryStatus(record.status)}</td>
             <td class="col-ip">${escapeHtml(record.client_ip || "未知")}</td>
             <td class="col-speed">${speed.toFixed(1)} Mbps</td>
           </tr>`;
@@ -969,12 +1125,12 @@
           <div class="target-row-progress" style="width:${progress}%"></div>
           <div>
             <div class="target-name">
-              ${escapeHtml(target.label)}
+              <span class="target-label-text">${escapeHtml(target.label)}</span>
               ${isRecommended ? `<span class="badge">推荐</span>` : ""}
               ${renderTargetStatus(targetState)}
             </div>
             <div class="target-host">
-              <span>${escapeHtml(target.host)}</span>
+              <span class="target-host-text">${escapeHtml(target.host)}</span>
               ${renderColoBadge(target.key)}
             </div>
           </div>
@@ -1221,11 +1377,33 @@
     }
 
     function toggleHistory(show) {
+      state.isHistoryOpen = show;
       els.historyModal.classList.toggle("active", show);
+      els.historyModal.setAttribute("aria-hidden", String(!show));
+      els.historyBtn.setAttribute("aria-expanded", String(show));
+      document.body.classList.toggle("history-open", show);
+      if (show) {
+        window.requestAnimationFrame(() => els.historyModal.focus({ preventScroll: true }));
+      } else {
+        els.historyBtn.focus({ preventScroll: true });
+      }
     }
 
     function formatLatency(value) {
       return typeof value === "number" ? `${value.toFixed(0)} ms` : "-";
+    }
+
+    function renderHistoryStatus(status) {
+      return `<span class="history-status-pill ${historyStatusClass(status)}">${formatStatus(status)}</span>`;
+    }
+
+    function historyStatusClass(status) {
+      const map = {
+        running: "running",
+        completed: "completed",
+        failed: "failed",
+      };
+      return map[status] || "running";
     }
 
     function formatStatus(status) {

@@ -267,4 +267,40 @@ mod tests {
         assert!(!html.contains("边缘节点"));
         assert!(!html.contains("searchParams.set(\"_\""));
     }
+
+    #[test]
+    fn embedded_index_html_should_keep_compact_target_rows_single_line() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            !html.contains("grid-template-columns: minmax(0, 1fr) auto auto;"),
+            "窄屏列表不应出现三列两行的中间态，避免 560-720px 宽度行高跳变"
+        );
+        assert!(
+            html.contains("target-host-text"),
+            "紧凑列表需要给主机名单独挂载可省略的样式类"
+        );
+        assert!(
+            html.contains("text-overflow: ellipsis"),
+            "紧凑列表中的长主机名应省略显示，避免撑高行内容"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_use_stable_history_dialog() {
+        let html = super::embedded_index_html();
+
+        assert!(html.contains("role=\"dialog\""));
+        assert!(html.contains("aria-modal=\"true\""));
+        assert!(html.contains("history-shell"));
+        assert!(html.contains("class=\"history-toolbar\""));
+        assert!(html.contains("class=\"history-status-pill"));
+        assert!(html.contains("height: min(760px, calc(100dvh - 40px))"));
+        assert!(html.contains(".modal-overlay:focus"));
+        assert!(html.contains("id=\"close-history-btn\""));
+        assert!(html.contains("els.closeHistoryBtn.addEventListener"));
+        assert!(!html.contains("clip-path: circle"));
+        assert!(!html.contains("backdrop-filter"));
+        assert!(!html.contains("class=\"history-fab\""));
+    }
 }
