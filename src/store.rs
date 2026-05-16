@@ -317,9 +317,9 @@ mod tests {
             id: None,
             update_token: None,
             domain_key: "a1".to_string(),
-            domain_host: "a1.steinsgate.eu.org".to_string(),
-            trace_url: "https://a1.steinsgate.eu.org/cdn-cgi/trace".to_string(),
-            download_url: "https://a1.steinsgate.eu.org/200mb.test".to_string(),
+            domain_host: "a1.example.com".to_string(),
+            trace_url: "https://a1.example.com/cdn-cgi/trace".to_string(),
+            download_url: "https://a1.example.com/200mb.test".to_string(),
             https_latency: LatencyStats {
                 median_ms: 42.0,
                 min_ms: 38.0,

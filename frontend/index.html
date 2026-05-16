@@ -199,6 +199,7 @@
     }
 
     .target-row {
+      position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1fr) 90px 110px 92px;
       gap: 10px;
@@ -206,7 +207,23 @@
       padding: 10px;
       border: 1px solid var(--border);
       border-radius: 10px;
+      overflow: hidden;
       background: #fffdf9;
+    }
+
+    .target-row > :not(.target-row-progress) {
+      position: relative;
+      z-index: 1;
+    }
+
+    .target-row-progress {
+      position: absolute;
+      inset: 0 auto 0 0;
+      z-index: 0;
+      width: 0%;
+      pointer-events: none;
+      background: rgba(218, 119, 86, .16);
+      transition: width .14s ease;
     }
 
     .target-row.recommended {
@@ -228,11 +245,28 @@
     }
 
     .target-host {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
       margin-top: 4px;
       color: var(--text-sub);
       font-family: var(--mono-stack);
       font-size: .76rem;
       word-break: break-all;
+    }
+
+    .target-colo {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 7px;
+      color: #7a5546;
+      background: rgba(218, 119, 86, .13);
+      font-family: var(--mono-stack);
+      font-size: .68rem;
+      font-weight: 800;
+      white-space: nowrap;
     }
 
     .badge {
@@ -280,61 +314,12 @@
       font-size: .74rem;
     }
 
-    .target-download-panel {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px 14px;
-      align-items: center;
-      padding-top: 10px;
-      border-top: 1px dashed #eadfd7;
-    }
-
-    .target-progress-track {
-      height: 8px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: #eee9e4;
-    }
-
-    .target-progress-fill {
-      width: 0%;
-      height: 100%;
-      background: var(--accent);
-      transition: width .12s;
-    }
-
-    .target-download-meta {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-
-    .meta-box {
-      min-width: 0;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--panel-bg);
-    }
-
-    .meta-box strong {
-      display: block;
-      margin-top: 5px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .target-download-strip {
+      margin-top: 6px;
+      color: #9a8f86;
       font-family: var(--mono-stack);
-      font-size: .9rem;
-    }
-
-    .footer-status {
-      grid-column: 1 / -1;
-      min-height: 1.3em;
-      color: #999;
-      font-size: .82rem;
-      text-align: left;
+      font-size: .72rem;
+      line-height: 1.35;
     }
 
     .modal-overlay {
@@ -486,9 +471,7 @@
 
     @media (max-width: 560px) {
       .topbar,
-      .target-row,
-      .target-download-panel,
-      .target-download-meta {
+      .target-row {
         grid-template-columns: 1fr;
       }
 
@@ -542,10 +525,6 @@
         <div class="info-row">
           <span class="label">IP 查询</span>
           <span class="value" id="client-location">API 待接入</span>
-        </div>
-        <div class="info-row">
-          <span class="label">边缘节点</span>
-          <span class="value" id="colo-info">待检测</span>
         </div>
         <div class="info-row">
           <span class="label">运营商</span>
@@ -633,7 +612,6 @@
       clientIp: document.getElementById("client-ip"),
       clientLocation: document.getElementById("client-location"),
       clientIsp: document.getElementById("client-isp"),
-      coloInfo: document.getElementById("colo-info"),
     };
 
     window.addEventListener("DOMContentLoaded", init);
@@ -677,7 +655,6 @@
         downloadSpeedMbps: null,
         downloadProgress: 0,
         downloadedBytes: 0,
-        saveStatus: "未开始",
         downloadMessage: "",
       };
     }
@@ -819,19 +796,17 @@
 
           const progress = progressRatio(elapsed, receivedBytes, contentLength);
           if (!savePromise && progress >= state.test.progress_save_ratio) {
-            updateDownloadSaveStatus(targetKey, "半程保存中");
             savePromise = saveRunningResult(targetKey, stableSpeed(speedSamples));
           }
         }
 
         const finalSpeed = stableSpeed(speedSamples);
         updateDownloadUi(targetKey, finalSpeed, receivedBytes, 1);
-        updateDownloadMessage(targetKey, "测速完成，正在保存记录");
 
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
-        await finalizeResult(targetKey, finalSpeed, "completed", savedRecord);
+        await finalizeResult(targetKey, finalSpeed, "completed", savedRecord).catch(() => null);
         markDownloadCompleted(targetKey, finalSpeed, receivedBytes);
       } catch (error) {
         const message = state.stopRequested
@@ -843,9 +818,7 @@
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
-        await finalizeResult(targetKey, stableSpeed(speedSamples), "failed", savedRecord).catch(() => {
-          updateDownloadSaveStatus(targetKey, "保存失败");
-        });
+        await finalizeResult(targetKey, stableSpeed(speedSamples), "failed", savedRecord).catch(() => null);
         markDownloadFailed(targetKey, stableSpeed(speedSamples), receivedBytes, message);
       } finally {
         controller.abort();
@@ -864,9 +837,7 @@
     }
 
     async function saveRunningResult(targetKey, speed) {
-      const saved = await saveResult(buildResultPayload(targetKey, speed, "running"));
-      updateDownloadSaveStatus(targetKey, "半程已保存");
-      return saved;
+      return saveResult(buildResultPayload(targetKey, speed, "running"));
     }
 
     async function finalizeResult(targetKey, speed, status, savedRecord) {
@@ -957,21 +928,27 @@
         <span style="text-align:right">下载</span>
         <span style="text-align:right">操作</span>
       </div>`;
-      const rows = state.targets.map(target => {
+      const rows = sortedTargetsForRender().map(target => {
         const targetState = state.targetStates.get(target.key);
         const stats = targetState?.stats;
         const isRecommended = target.key === recommendedKey;
         const isActive = state.activeTargetKey === target.key;
         const disabled = (state.isDownloading && !isActive) || targetState?.status === "failed";
         const buttonText = renderDownloadButtonText(targetState);
+        const progress = renderDownloadProgress(targetState);
         return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}">
+          <div class="target-row-progress" style="width:${progress}%"></div>
           <div>
             <div class="target-name">
               ${escapeHtml(target.label)}
               ${isRecommended ? `<span class="badge">推荐</span>` : ""}
               ${renderTargetStatus(targetState)}
             </div>
-            <div class="target-host">${escapeHtml(target.host)}</div>
+            <div class="target-host">
+              <span>${escapeHtml(target.host)}</span>
+              ${renderColoBadge(target.key)}
+            </div>
+            ${renderDownloadStrip(targetState)}
           </div>
           <div class="metric">
             <strong>${stats ? `${stats.median_ms.toFixed(0)} ms` : "-"}</strong>
@@ -982,39 +959,25 @@
             <span>${renderDownloadStateLabel(targetState)}</span>
           </div>
           <button class="btn-primary" type="button" onclick="startDownloadTest('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
-          ${renderDownloadPanel(targetState)}
         </div>`;
       }).join("");
       els.targetList.innerHTML = header + rows;
     }
 
-    function renderDownloadPanel(targetState) {
+    function renderDownloadProgress(targetState) {
+      if (!targetState || targetState.downloadStatus === "idle") return 0;
+      return Math.min(100, Math.max(0, targetState.downloadProgress * 100)).toFixed(1);
+    }
+
+    function renderColoBadge(targetKey) {
+      const colo = state.currentColos.get(targetKey);
+      return colo ? `<span class="target-colo">${escapeHtml(colo)}</span>` : "";
+    }
+
+    function renderDownloadStrip(targetState) {
       if (!targetState || targetState.downloadStatus === "idle") return "";
-      const progress = Math.min(100, Math.max(0, targetState.downloadProgress * 100));
-      return `<div class="target-download-panel" aria-label="测速完成后显示在节点内">
-        <div class="target-progress-track">
-          <div class="target-progress-fill" style="width:${progress}%"></div>
-        </div>
-        <div class="download-metric">
-          <strong>${formatNodeSpeedValue(targetState)}</strong>
-          <span>Mbps</span>
-        </div>
-        <div class="target-download-meta">
-          <div class="meta-box">
-            <span class="label">已下载</span>
-            <strong>${formatBytes(targetState.downloadedBytes)}</strong>
-          </div>
-          <div class="meta-box">
-            <span class="label">保存状态</span>
-            <strong>${escapeHtml(targetState.saveStatus)}</strong>
-          </div>
-          <div class="meta-box">
-            <span class="label">测速状态</span>
-            <strong>${escapeHtml(renderDownloadStateLabel(targetState))}</strong>
-          </div>
-        </div>
-        <div class="footer-status">${escapeHtml(targetState.downloadMessage || " ")}</div>
-      </div>`;
+      const message = targetState.downloadMessage ? ` · ${targetState.downloadMessage}` : "";
+      return `<div class="target-download-strip">${formatBytes(targetState.downloadedBytes)}${escapeHtml(message)}</div>`;
     }
 
     function renderDownloadButtonText(targetState) {
@@ -1070,6 +1033,24 @@
       return ready[0].key;
     }
 
+    function sortedTargetsForRender() {
+      return state.targets
+        .map((target, index) => ({
+          target,
+          index,
+          state: state.targetStates.get(target.key),
+        }))
+        .sort((a, b) => {
+          const aStats = a.state?.stats;
+          const bStats = b.state?.stats;
+          if (aStats && bStats) return aStats.median_ms - bStats.median_ms || a.index - b.index;
+          if (aStats) return -1;
+          if (bStats) return 1;
+          return a.index - b.index;
+        })
+        .map(item => item.target);
+    }
+
     function resetDownloadUi(targetKey) {
       const targetState = state.targetStates.get(targetKey);
       if (!targetState) return;
@@ -1077,7 +1058,6 @@
       targetState.downloadSpeedMbps = 0;
       targetState.downloadProgress = 0;
       targetState.downloadedBytes = 0;
-      targetState.saveStatus = "未保存";
       targetState.downloadMessage = "测速中...";
     }
 
@@ -1087,13 +1067,6 @@
       targetState.downloadSpeedMbps = roundMetric(speed);
       targetState.downloadedBytes = bytes;
       targetState.downloadProgress = progress;
-      renderTargetList();
-    }
-
-    function updateDownloadSaveStatus(targetKey, saveStatus) {
-      const targetState = state.targetStates.get(targetKey);
-      if (!targetState) return;
-      targetState.saveStatus = saveStatus;
       renderTargetList();
     }
 
@@ -1111,7 +1084,6 @@
       targetState.downloadSpeedMbps = roundMetric(speed);
       targetState.downloadedBytes = bytes;
       targetState.downloadProgress = 1;
-      targetState.saveStatus = "已保存";
       targetState.downloadMessage = "测速完成";
       renderTargetList();
     }
@@ -1131,13 +1103,6 @@
       els.clientIp.textContent = state.currentClientIp || "待检测";
       els.clientLocation.textContent = "API 待接入";
       els.clientIsp.textContent = "API 待接入";
-      if (!state.currentColos.size) {
-        els.coloInfo.textContent = "待检测";
-        return;
-      }
-      els.coloInfo.textContent = Array.from(state.currentColos.entries())
-        .map(([key, colo]) => `${key}:${colo}`)
-        .join(" / ");
     }
 
     function parseTrace(text) {

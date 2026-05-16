@@ -36,7 +36,7 @@ pub struct TestSettings {
     pub progress_save_ratio: f64,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 struct FileConfig {
     #[serde(default)]
     server: ServerConfig,
@@ -71,6 +71,8 @@ struct ExternalDomainsFile {
 pub enum ConfigError {
     #[error("读取配置失败: {0}")]
     Io(#[from] std::io::Error),
+    #[error("配置文件不存在: {}", .0.display())]
+    MissingConfig(PathBuf),
     #[error("TOML 配置解析失败: {0}")]
     Toml(#[from] toml::de::Error),
     #[error("YAML 线路配置解析失败: {0}")]
@@ -87,7 +89,7 @@ impl RuntimeConfig {
         if path.is_file() {
             Self::from_toml_str(&std::fs::read_to_string(path)?)
         } else {
-            Self::from_file_config(FileConfig::default())
+            Err(ConfigError::MissingConfig(path))
         }
     }
 
@@ -112,20 +114,6 @@ impl RuntimeConfig {
 
     pub fn listen_addr(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
-    }
-}
-
-impl Default for FileConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            database: DatabaseConfig::default(),
-            test: TestSettings::default(),
-            domains: DomainConfig {
-                external_yaml_path: Some(PathBuf::from("/opt/emby_ext_domains/config.yaml")),
-                items: default_domain_items(),
-            },
-        }
     }
 }
 
@@ -178,11 +166,7 @@ fn load_domain_items(config: &DomainConfig) -> Result<Vec<DomainItem>, ConfigErr
         }
     }
 
-    Ok(if config.items.is_empty() {
-        default_domain_items()
-    } else {
-        config.items.clone()
-    })
+    Ok(config.items.clone())
 }
 
 fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
@@ -252,42 +236,9 @@ fn unique_key(base: String, used_keys: &mut HashSet<String>) -> String {
     unreachable!("无限递增的后缀最终一定能生成唯一 key")
 }
 
-fn default_domain_items() -> Vec<DomainItem> {
-    vec![
-        domain_item("19931110 线路", "https://19931110.steinsgate.eu.org"),
-        domain_item("a1 线路", "https://a1.steinsgate.eu.org"),
-        domain_item("a2 线路", "https://a2.steinsgate.eu.org"),
-        domain_item("a3 线路", "https://a3.steinsgate.eu.org"),
-        domain_item("a4 线路", "https://a4.steinsgate.eu.org"),
-        domain_item("a5 线路", "https://a5.steinsgate.eu.org"),
-        domain_item("a6 线路", "https://a6.steinsgate.eu.org"),
-        domain_item("a7 线路", "https://a7.steinsgate.eu.org"),
-        domain_item("csssd 线路", "https://csssd.steinsgate.eu.org"),
-        domain_item("czkcdn 线路", "https://czkcdn.steinsgate.eu.org"),
-        domain_item("fisink 线路", "https://fisink.steinsgate.eu.org"),
-        domain_item("mfa 线路", "https://mfa.steinsgate.eu.org"),
-        domain_item("mofashi 线路", "https://mofashi.steinsgate.eu.org"),
-        domain_item("nexus 线路", "https://nexus.steinsgate.eu.org"),
-        domain_item("qms 线路", "https://qms.steinsgate.eu.org"),
-        domain_item("shopify 线路", "https://shopify.steinsgate.eu.org"),
-        domain_item("sinfan 线路", "https://sinfan.steinsgate.eu.org"),
-        domain_item("ubi 线路", "https://ubi.steinsgate.eu.org"),
-        domain_item("v6 线路", "https://v6.steinsgate.eu.org"),
-        domain_item("wetest 线路", "https://wetest.steinsgate.eu.org"),
-        domain_item("zhetengsha 线路", "https://zhetengsha.steinsgate.eu.org"),
-    ]
-}
-
-fn domain_item(name: &str, url: &str) -> DomainItem {
-    DomainItem {
-        name: name.to_string(),
-        url: url.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::RuntimeConfig;
+    use super::{ConfigError, RuntimeConfig};
 
     #[test]
     fn runtime_config_should_read_server_and_test_options_from_toml() {
@@ -305,7 +256,7 @@ mod tests {
 
             [[domains.items]]
             name = "a1 线路"
-            url = "https://a1.steinsgate.eu.org"
+            url = "https://a1.example.com"
             "#,
         )
         .expect("config should parse");
@@ -329,9 +280,9 @@ mod tests {
               port: 52143
             domains:
               - name: "19931110 线路"
-                url: "https://19931110.steinsgate.eu.org"
+                url: "https://line-a.example.com"
               - name: "a1 线路"
-                url: "https://a1.steinsgate.eu.org/"
+                url: "https://line-b.example.com/"
             "#,
         )
         .expect("yaml should be writable");
@@ -343,7 +294,7 @@ mod tests {
 
             [[domains.items]]
             name = "fallback"
-            url = "https://fallback.steinsgate.eu.org"
+            url = "https://fallback.example.com"
             "#,
             yaml_path.display()
         );
@@ -355,11 +306,35 @@ mod tests {
         assert_eq!(config.targets[0].label, "19931110 线路");
         assert_eq!(
             config.targets[0].trace_url,
-            "https://19931110.steinsgate.eu.org/cdn-cgi/trace"
+            "https://line-a.example.com/cdn-cgi/trace"
         );
         assert_eq!(
             config.targets[1].download_url,
-            "https://a1.steinsgate.eu.org/200mb.test"
+            "https://line-b.example.com/200mb.test"
         );
+    }
+
+    #[test]
+    fn runtime_config_should_reject_missing_config_file() {
+        let missing_path = std::env::temp_dir().join(format!(
+            "web-speed-missing-config-{}.toml",
+            std::process::id()
+        ));
+        let result = RuntimeConfig::load(&missing_path);
+
+        assert!(matches!(result, Err(ConfigError::MissingConfig(path)) if path == missing_path));
+    }
+
+    #[test]
+    fn runtime_config_should_reject_empty_domain_sources() {
+        let result = RuntimeConfig::from_toml_str(
+            r#"
+            [server]
+            host = "127.0.0.1"
+            port = 3000
+            "#,
+        );
+
+        assert!(matches!(result, Err(ConfigError::NoDomains)));
     }
 }

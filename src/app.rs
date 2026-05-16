@@ -245,10 +245,15 @@ mod tests {
         assert!(html.contains("多域名网络测速"));
         assert!(html.contains("loadConfig()"));
         assert!(html.contains("target-speed-value"));
-        assert!(html.contains("target-progress-fill"));
-        assert!(html.contains("测速完成后显示在节点内"));
+        assert!(html.contains("target-row-progress"));
+        assert!(html.contains("target-colo"));
+        assert!(html.contains("sortedTargetsForRender()"));
         assert!(html.contains("stopDownloadTest()"));
         assert!(html.contains("progress_save_ratio"));
+        assert!(!html.contains("保存状态"));
+        assert!(!html.contains("已保存"));
+        assert!(!html.contains("colo-info"));
+        assert!(!html.contains("边缘节点"));
         assert!(!html.contains("searchParams.set(\"_\""));
     }
 }
