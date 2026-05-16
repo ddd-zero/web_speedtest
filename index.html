@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>多域名网络测速</title>
+  <style>
+    :root {
+      --bg-color: #f5f2eb;
+      --card-bg: #ffffff;
+      --panel-bg: #fafafa;
+      --text-main: #2d2d2d;
+      --text-sub: #888888;
+      --accent: #da7756;
+      --accent-hover: #b86448;
+      --good: #2f9e44;
+      --warn: #d08b26;
+      --bad: #c94848;
+      --border: #e6e1da;
+      --font-stack: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono-stack: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    html {
+      min-height: 100%;
+    }
+
+    body {
+      min-height: 100dvh;
+      margin: 0;
+      padding: 22px;
+      box-sizing: border-box;
+      color: var(--text-main);
+      background: var(--bg-color);
+      font-family: var(--font-stack);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid rgba(230, 225, 218, .78);
+      border-radius: 18px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 4%);
+    }
+
+    .main-card,
+    .side-card {
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.48rem;
+      letter-spacing: 0;
+      line-height: 1.25;
+    }
+
+    .subline {
+      margin-top: 7px;
+      color: var(--text-sub);
+      font-size: .86rem;
+      line-height: 1.45;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: var(--font-stack);
+      font-size: .92rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .2s, background .2s, border-color .2s, color .2s, opacity .2s;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+      transform: none;
+    }
+
+    .btn-primary {
+      color: #fff;
+      background: var(--accent);
+      box-shadow: 0 4px 15px rgba(218, 119, 86, .24);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      color: #555;
+      background: #fff;
+      border: 1px solid #ddd6ce;
+    }
+
+    .info-group {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px 16px;
+      margin-bottom: 16px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 0;
+      border-bottom: 1px dashed #e8e2dc;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: var(--text-sub);
+      font-size: .83rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .value {
+      max-width: 72%;
+      text-align: right;
+      word-break: break-all;
+      font-family: var(--mono-stack);
+      font-size: .88rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 16px 0 10px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+
+    .mini-status {
+      min-height: 1.2em;
+      color: var(--text-sub);
+      font-size: .78rem;
+      text-align: right;
+    }
+
+    .target-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .target-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fffdf9;
+    }
+
+    .target-row.recommended {
+      border-color: rgba(218, 119, 86, .55);
+      box-shadow: 0 8px 22px rgba(218, 119, 86, .11);
+    }
+
+    .target-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-weight: 800;
+    }
+
+    .target-host {
+      margin-top: 5px;
+      color: var(--text-sub);
+      font-family: var(--mono-stack);
+      font-size: .8rem;
+      word-break: break-all;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      color: var(--accent);
+      background: rgba(218, 119, 86, .12);
+      font-size: .72rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .metric {
+      min-width: 88px;
+      text-align: right;
+      font-family: var(--mono-stack);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.06rem;
+      color: var(--text-main);
+    }
+
+    .metric span {
+      color: var(--text-sub);
+      font-size: .74rem;
+    }
+
+    .speed-display {
+      margin: 16px 0 14px;
+      text-align: center;
+    }
+
+    .speed-value {
+      font-size: 4rem;
+      font-weight: 850;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .speed-unit {
+      margin-left: 5px;
+      color: var(--text-sub);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .chart-wrapper {
+      width: 100%;
+      height: 120px;
+      margin-bottom: 16px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .progress-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #eee9e4;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+      transition: width .12s;
+    }
+
+    .download-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .meta-box {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-bg);
+    }
+
+    .meta-box strong {
+      display: block;
+      margin-top: 5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--mono-stack);
+      font-size: .9rem;
+    }
+
+    .footer-status {
+      min-height: 1.3em;
+      margin-top: 14px;
+      color: #999;
+      font-size: .82rem;
+      text-align: center;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+      background: rgba(0, 0, 0, .48);
+      backdrop-filter: blur(3px);
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      width: min(760px, 100%);
+      max-height: 86vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, .2);
+    }
+
+    .modal-header,
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #eee;
+      background: #fff;
+    }
+
+    .modal-header {
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 1.18rem;
+    }
+
+    .close-btn {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      color: #999;
+      background: transparent;
+      font-size: 1.8rem;
+      line-height: 1;
+    }
+
+    .search-bar {
+      flex-wrap: wrap;
+      background: #fafafa;
+    }
+
+    .search-input,
+    .search-select {
+      min-width: 132px;
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ddd6ce;
+      border-radius: 10px;
+      font-family: var(--font-stack);
+      font-size: .9rem;
+      background: #fff;
+    }
+
+    .table-container {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 700px;
+      border-collapse: collapse;
+      font-size: .84rem;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 12px 9px;
+      border-bottom: 1px solid #eee;
+      color: #888;
+      background: #fff;
+      text-align: left;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 9px;
+      border-bottom: 1px solid #f3f0ec;
+      color: #444;
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: #fffdf9;
+    }
+
+    .col-speed {
+      color: var(--accent);
+      font-family: var(--mono-stack);
+      font-weight: 800;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .col-ip,
+    .col-latency {
+      font-family: var(--mono-stack);
+      white-space: nowrap;
+    }
+
+    .empty-row {
+      padding: 26px;
+      color: #999;
+      text-align: center;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        padding: 14px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .topbar,
+      .target-row,
+      .download-meta {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        display: grid;
+      }
+
+      .top-actions {
+        width: 100%;
+      }
+
+      .top-actions button,
+      .target-row button {
+        width: 100%;
+      }
+
+      .target-row {
+        align-items: stretch;
+      }
+
+      .metric {
+        text-align: left;
+      }
+
+      .speed-value {
+        font-size: 3.35rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="layout">
+    <section class="card main-card">
+      <div class="topbar">
+        <div>
+          <h1>多域名网络测速</h1>
+          <div class="subline">自动多轮检测 HTTPS 延迟，点击域名单线程下载测速。</div>
+        </div>
+        <div class="top-actions">
+          <button class="btn-secondary" id="refresh-latency-btn" type="button">重测延迟</button>
+          <button class="btn-secondary" id="history-btn" type="button">测速记录</button>
+        </div>
+      </div>
+
+      <div class="info-group">
+        <div class="info-row">
+          <span class="label">用户 IP</span>
+          <span class="value" id="client-ip">待检测</span>
+        </div>
+        <div class="info-row">
+          <span class="label">IP 查询</span>
+          <span class="value" id="client-location">API 待接入</span>
+        </div>
+        <div class="info-row">
+          <span class="label">边缘节点</span>
+          <span class="value" id="colo-info">待检测</span>
+        </div>
+        <div class="info-row">
+          <span class="label">运营商</span>
+          <span class="value" id="client-isp">API 待接入</span>
+        </div>
+      </div>
+
+      <div class="section-title">
+        <h2>域名延迟对比</h2>
+        <span class="mini-status" id="latency-status">准备中</span>
+      </div>
+      <div class="target-list" id="target-list"></div>
+    </section>
+
+    <aside class="card side-card">
+      <div class="section-title" style="margin-top:0">
+        <h2>单线程下载测速</h2>
+        <span class="mini-status" id="active-target">未选择</span>
+      </div>
+      <div class="speed-display">
+        <span class="speed-value" id="dl-speed">0.0</span>
+        <span class="speed-unit">Mbps</span>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="speed-chart"></canvas>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="dl-progress"></div>
+      </div>
+      <div class="download-meta">
+        <div class="meta-box">
+          <span class="label">当前域名</span>
+          <strong id="meta-domain">-</strong>
+        </div>
+        <div class="meta-box">
+          <span class="label">已下载</span>
+          <strong id="meta-bytes">0 MB</strong>
+        </div>
+        <div class="meta-box">
+          <span class="label">保存状态</span>
+          <strong id="meta-save">未开始</strong>
+        </div>
+      </div>
+      <div class="footer-status" id="status-text"></div>
+    </aside>
+  </main>
+
+  <div class="modal-overlay" id="history-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">测速记录</h2>
+        <button class="close-btn" id="close-history-btn" type="button" aria-label="关闭">&times;</button>
+      </div>
+      <div class="search-bar">
+        <select id="history-domain" class="search-select">
+          <option value="">全部域名</option>
+        </select>
+        <select id="history-status" class="search-select">
+          <option value="">全部状态</option>
+          <option value="running">测速中</option>
+          <option value="completed">已完成</option>
+          <option value="failed">失败</option>
+        </select>
+        <input id="history-query" class="search-input" placeholder="搜索位置 / 运营商 / 节点">
+        <button class="btn-primary" id="query-history-btn" type="button">查询</button>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>域名</th>
+              <th class="col-latency">HTTPS</th>
+              <th>状态</th>
+              <th class="col-ip">IP</th>
+              <th style="text-align:right">下载速度</th>
+            </tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LATENCY_ROUNDS = 5;
+    const LATENCY_TIMEOUT_MS = 3500;
+    const DOWNLOAD_TEST_MS = 8500;
+    const SMOOTHING = 0.3;
+
+    const state = {
+      targets: [],
+      targetStates: new Map(),
+      activeTargetKey: null,
+      currentClientIp: "",
+      currentColos: new Map(),
+      speedHistory: [],
+      isDownloading: false,
+    };
+
+    const els = {
+      targetList: document.getElementById("target-list"),
+      latencyStatus: document.getElementById("latency-status"),
+      refreshLatencyBtn: document.getElementById("refresh-latency-btn"),
+      historyBtn: document.getElementById("history-btn"),
+      historyModal: document.getElementById("history-modal"),
+      closeHistoryBtn: document.getElementById("close-history-btn"),
+      historyDomain: document.getElementById("history-domain"),
+      historyStatus: document.getElementById("history-status"),
+      historyQuery: document.getElementById("history-query"),
+      queryHistoryBtn: document.getElementById("query-history-btn"),
+      historyBody: document.getElementById("history-body"),
+      clientIp: document.getElementById("client-ip"),
+      clientLocation: document.getElementById("client-location"),
+      clientIsp: document.getElementById("client-isp"),
+      coloInfo: document.getElementById("colo-info"),
+      activeTarget: document.getElementById("active-target"),
+      dlSpeed: document.getElementById("dl-speed"),
+      dlProgress: document.getElementById("dl-progress"),
+      metaDomain: document.getElementById("meta-domain"),
+      metaBytes: document.getElementById("meta-bytes"),
+      metaSave: document.getElementById("meta-save"),
+      statusText: document.getElementById("status-text"),
+      canvas: document.getElementById("speed-chart"),
+    };
+
+    const ctx = els.canvas.getContext("2d");
+
+    window.addEventListener("DOMContentLoaded", init);
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      drawChart();
+    });
+
+    els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
+    els.historyBtn.addEventListener("click", openHistory);
+    els.closeHistoryBtn.addEventListener("click", () => toggleHistory(false));
+    els.queryHistoryBtn.addEventListener("click", loadHistory);
+
+    async function init() {
+      resizeCanvas();
+      drawChart();
+      await loadConfig();
+      runLatencyRounds();
+    }
+
+    async function loadConfig() {
+      try {
+        const response = await fetch("/api/config", { cache: "no-store" });
+        if (!response.ok) throw new Error(`配置加载失败: ${response.status}`);
+        state.targets = await response.json();
+        state.targetStates = new Map(state.targets.map(target => [target.key, {
+          samples: [],
+          stats: null,
+          status: "waiting",
+          error: "",
+        }]));
+        renderHistoryDomainOptions();
+        renderTargetList();
+      } catch (error) {
+        els.targetList.innerHTML = `<div class="empty-row">${escapeHtml(error.message)}</div>`;
+        els.latencyStatus.textContent = "配置加载失败";
+      }
+    }
+
+    async function runLatencyRounds() {
+      if (!state.targets.length || state.isDownloading) return;
+      state.targetStates.forEach(targetState => {
+        targetState.samples = [];
+        targetState.stats = null;
+        targetState.status = "testing";
+        targetState.error = "";
+      });
+      els.latencyStatus.textContent = `延迟测试 0/${LATENCY_ROUNDS}`;
+      renderTargetList();
+
+      for (let round = 1; round <= LATENCY_ROUNDS; round += 1) {
+        await Promise.all(state.targets.map(async target => {
+          const targetState = state.targetStates.get(target.key);
+          const result = await measureHttpsLatency(target);
+          if (result.ok) {
+            targetState.samples.push(result.ms);
+            targetState.status = "testing";
+            if (result.trace.ip && !state.currentClientIp) {
+              state.currentClientIp = result.trace.ip;
+              updateClientInfo();
+            }
+            if (result.trace.colo) {
+              state.currentColos.set(target.key, result.trace.colo);
+              updateClientInfo();
+            }
+          } else {
+            targetState.error = result.error;
+          }
+        }));
+
+        state.targetStates.forEach(targetState => {
+          if (targetState.samples.length) {
+            targetState.stats = summarizeLatency(targetState.samples);
+          }
+        });
+        els.latencyStatus.textContent = `延迟测试 ${round}/${LATENCY_ROUNDS}`;
+        renderTargetList();
+        if (round < LATENCY_ROUNDS) await sleep(140);
+      }
+
+      state.targetStates.forEach(targetState => {
+        targetState.status = targetState.samples.length ? "ready" : "failed";
+      });
+      els.latencyStatus.textContent = "延迟测试完成";
+      renderTargetList();
+    }
+
+    async function measureHttpsLatency(target) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), LATENCY_TIMEOUT_MS);
+      const started = performance.now();
+      try {
+        const url = new URL(target.trace_url);
+        url.searchParams.set("_", `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+        const response = await fetch(url, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        return {
+          ok: true,
+          ms: performance.now() - started,
+          trace: parseTrace(text),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error.name === "AbortError" ? "请求超时" : "请求失败",
+        };
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+
+    async function startDownloadTest(targetKey) {
+      if (state.isDownloading) return;
+      const target = state.targets.find(item => item.key === targetKey);
+      const targetState = state.targetStates.get(targetKey);
+      if (!target || !targetState || targetState.status === "failed") return;
+
+      state.isDownloading = true;
+      state.activeTargetKey = targetKey;
+      state.speedHistory = [];
+      let speedSamples = [];
+      let smoothedSpeed = 0;
+      let receivedBytes = 0;
+      let lastBytes = 0;
+      let lastTime = performance.now();
+      let savePromise = null;
+      let savedRecord = null;
+
+      resetDownloadUi(target);
+      renderTargetList();
+
+      const controller = new AbortController();
+      const started = performance.now();
+      try {
+        const downloadUrl = new URL(target.download_url);
+        downloadUrl.searchParams.set("_", `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+        const response = await fetch(downloadUrl, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`下载请求失败: ${response.status}`);
+        }
+
+        const contentLength = Number(response.headers.get("content-length") || 0);
+        const reader = response.body.getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          const now = performance.now();
+          const elapsed = now - started;
+          if (elapsed >= DOWNLOAD_TEST_MS) {
+            await reader.cancel();
+            break;
+          }
+          if (done) break;
+
+          receivedBytes += value.length;
+          if (now - lastTime >= 200) {
+            const instantSpeed = ((receivedBytes - lastBytes) * 8) / ((now - lastTime) / 1000) / 1_000_000;
+            smoothedSpeed = smoothedSpeed === 0
+              ? instantSpeed
+              : smoothedSpeed * (1 - SMOOTHING) + instantSpeed * SMOOTHING;
+            speedSamples.push(smoothedSpeed);
+            state.speedHistory.push(smoothedSpeed);
+            if (state.speedHistory.length > 56) state.speedHistory.shift();
+
+            updateDownloadUi(smoothedSpeed, receivedBytes, progressRatio(elapsed, receivedBytes, contentLength));
+            drawChart();
+            lastTime = now;
+            lastBytes = receivedBytes;
+          }
+
+          const progress = progressRatio(elapsed, receivedBytes, contentLength);
+          if (!savePromise && progress >= 0.5) {
+            els.metaSave.textContent = "半程保存中";
+            savePromise = saveRunningResult(targetKey, stableSpeed(speedSamples));
+          }
+        }
+
+        const finalSpeed = stableSpeed(speedSamples);
+        els.dlSpeed.textContent = finalSpeed.toFixed(1);
+        els.dlProgress.style.width = "100%";
+        els.statusText.textContent = "测速完成，正在保存记录";
+
+        if (savePromise) {
+          savedRecord = await savePromise.catch(() => null);
+        }
+        await finalizeResult(targetKey, finalSpeed, "completed", savedRecord);
+        els.statusText.textContent = "测速完成";
+        els.metaSave.textContent = "已保存";
+      } catch (error) {
+        const message = error instanceof TypeError
+          ? "下载失败：测速文件可能缺少跨域响应头"
+          : error.message;
+        els.statusText.textContent = message;
+        if (savePromise) {
+          savedRecord = await savePromise.catch(() => null);
+        }
+        await finalizeResult(targetKey, stableSpeed(speedSamples), "failed", savedRecord).catch(() => {
+          els.metaSave.textContent = "保存失败";
+        });
+      } finally {
+        controller.abort();
+        state.isDownloading = false;
+        renderTargetList();
+      }
+    }
+
+    async function saveRunningResult(targetKey, speed) {
+      const saved = await saveResult(buildResultPayload(targetKey, speed, "running"));
+      els.metaSave.textContent = "半程已保存";
+      return saved;
+    }
+
+    async function finalizeResult(targetKey, speed, status, savedRecord) {
+      const payload = buildResultPayload(targetKey, speed, status);
+      if (savedRecord) {
+        payload.id = savedRecord.id;
+        payload.update_token = savedRecord.update_token;
+      }
+      await saveResult(payload);
+    }
+
+    async function saveResult(payload) {
+      const response = await fetch("/api/results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "保存失败" }));
+        throw new Error(error.error || "保存失败");
+      }
+      return response.json();
+    }
+
+    function buildResultPayload(targetKey, speed, status) {
+      const targetState = state.targetStates.get(targetKey);
+      const stats = targetState?.stats || {
+        median_ms: 0,
+        min_ms: 0,
+        max_ms: 0,
+        samples_ms: [],
+      };
+      return {
+        domain_key: targetKey,
+        https_latency: stats,
+        partial_download_mbps: status === "running" ? roundMetric(speed) : null,
+        final_download_mbps: status !== "running" ? roundMetric(speed) : null,
+        status,
+        client_ip: state.currentClientIp || null,
+        location: null,
+        isp: null,
+        colo: state.currentColos.get(targetKey) || null,
+      };
+    }
+
+    async function openHistory() {
+      toggleHistory(true);
+      await loadHistory();
+    }
+
+    async function loadHistory() {
+      els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="6">加载中...</td></tr>`;
+      const params = new URLSearchParams();
+      if (els.historyDomain.value) params.set("domain", els.historyDomain.value);
+      if (els.historyStatus.value) params.set("status", els.historyStatus.value);
+      if (els.historyQuery.value.trim()) params.set("q", els.historyQuery.value.trim());
+      params.set("limit", "80");
+
+      try {
+        const response = await fetch(`/api/results?${params.toString()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("记录加载失败");
+        const records = await response.json();
+        if (!records.length) {
+          els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="6">暂无记录</td></tr>`;
+          return;
+        }
+        els.historyBody.innerHTML = records.map(record => {
+          const speed = record.final_download_mbps ?? record.partial_download_mbps ?? 0;
+          return `<tr>
+            <td>${formatTime(record.created_at)}</td>
+            <td>${escapeHtml(record.domain_host)}<br><span class="badge">${escapeHtml(record.domain_key)}</span></td>
+            <td class="col-latency">${formatLatency(record.https_latency_median_ms)}</td>
+            <td>${formatStatus(record.status)}</td>
+            <td class="col-ip">${escapeHtml(record.client_ip || "未知")}</td>
+            <td class="col-speed">${speed.toFixed(1)} Mbps</td>
+          </tr>`;
+        }).join("");
+      } catch (error) {
+        els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="6">${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+
+    function renderTargetList() {
+      const recommendedKey = findRecommendedTargetKey();
+      els.targetList.innerHTML = state.targets.map(target => {
+        const targetState = state.targetStates.get(target.key);
+        const stats = targetState?.stats;
+        const isRecommended = target.key === recommendedKey;
+        const disabled = state.isDownloading || targetState?.status === "failed";
+        const buttonText = targetState?.status === "failed" ? "不可用" : "开始测速";
+        return `<div class="target-row ${isRecommended ? "recommended" : ""}">
+          <div>
+            <div class="target-name">
+              ${escapeHtml(target.label)}
+              ${isRecommended ? `<span class="badge">推荐</span>` : ""}
+              ${renderTargetStatus(targetState)}
+            </div>
+            <div class="target-host">${escapeHtml(target.host)}</div>
+          </div>
+          <div class="metric">
+            <strong>${stats ? `${stats.median_ms.toFixed(0)} ms` : "-"}</strong>
+            <span>${stats ? `min ${stats.min_ms.toFixed(0)} / ${stats.samples_ms.length} 次` : targetState?.error || "等待测试"}</span>
+          </div>
+          <button class="btn-primary" type="button" onclick="startDownloadTest('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
+        </div>`;
+      }).join("");
+    }
+
+    function renderTargetStatus(targetState) {
+      if (!targetState) return "";
+      if (targetState.status === "testing") return `<span class="badge">检测中</span>`;
+      if (targetState.status === "failed") return `<span class="badge" style="color:var(--bad);background:rgba(201,72,72,.12)">失败</span>`;
+      if (targetState.status === "ready") return `<span class="badge" style="color:var(--good);background:rgba(47,158,68,.12)">可测速</span>`;
+      return "";
+    }
+
+    function renderHistoryDomainOptions() {
+      els.historyDomain.innerHTML = `<option value="">全部域名</option>` + state.targets
+        .map(target => `<option value="${escapeHtml(target.key)}">${escapeHtml(target.host)}</option>`)
+        .join("");
+    }
+
+    function findRecommendedTargetKey() {
+      const ready = state.targets
+        .map(target => ({ key: target.key, stats: state.targetStates.get(target.key)?.stats }))
+        .filter(item => item.stats);
+      if (!ready.length) return null;
+      ready.sort((a, b) => a.stats.median_ms - b.stats.median_ms);
+      return ready[0].key;
+    }
+
+    function resetDownloadUi(target) {
+      els.activeTarget.textContent = target.host;
+      els.metaDomain.textContent = target.host;
+      els.metaBytes.textContent = "0 MB";
+      els.metaSave.textContent = "未保存";
+      els.statusText.textContent = "测速中...";
+      els.dlSpeed.textContent = "0.0";
+      els.dlProgress.style.width = "0%";
+      drawChart();
+    }
+
+    function updateDownloadUi(speed, bytes, progress) {
+      els.dlSpeed.textContent = speed.toFixed(1);
+      els.metaBytes.textContent = `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      els.dlProgress.style.width = `${Math.min(100, progress * 100)}%`;
+    }
+
+    function updateClientInfo() {
+      els.clientIp.textContent = state.currentClientIp || "待检测";
+      els.clientLocation.textContent = "API 待接入";
+      els.clientIsp.textContent = "API 待接入";
+      if (!state.currentColos.size) {
+        els.coloInfo.textContent = "待检测";
+        return;
+      }
+      els.coloInfo.textContent = Array.from(state.currentColos.entries())
+        .map(([key, colo]) => `${key}:${colo}`)
+        .join(" / ");
+    }
+
+    function parseTrace(text) {
+      return text.trim().split("\n").reduce((acc, line) => {
+        const index = line.indexOf("=");
+        if (index > 0) {
+          acc[line.slice(0, index)] = line.slice(index + 1);
+        }
+        return acc;
+      }, {});
+    }
+
+    function summarizeLatency(samples) {
+      const sorted = [...samples].sort((a, b) => a - b);
+      return {
+        median_ms: sorted[Math.floor(sorted.length / 2)],
+        min_ms: sorted[0],
+        max_ms: sorted[sorted.length - 1],
+        samples_ms: samples.map(roundMetric),
+      };
+    }
+
+    function stableSpeed(samples) {
+      if (!samples.length) return 0;
+      const sorted = [...samples].sort((a, b) => a - b);
+      return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.75))];
+    }
+
+    function progressRatio(elapsed, bytes, contentLength) {
+      const timeRatio = elapsed / DOWNLOAD_TEST_MS;
+      const byteRatio = contentLength > 0 ? bytes / contentLength : 0;
+      return Math.max(timeRatio, byteRatio);
+    }
+
+    function resizeCanvas() {
+      const ratio = window.devicePixelRatio || 1;
+      const box = els.canvas.getBoundingClientRect();
+      els.canvas.width = box.width * ratio;
+      els.canvas.height = box.height * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function drawChart() {
+      const width = els.canvas.getBoundingClientRect().width;
+      const height = els.canvas.getBoundingClientRect().height;
+      ctx.clearRect(0, 0, width, height);
+      if (state.speedHistory.length < 2) return;
+
+      const max = Math.max(...state.speedHistory, 10) * 1.2;
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, "rgba(218,119,86,.2)");
+      gradient.addColorStop(1, "rgba(218,119,86,0)");
+
+      ctx.beginPath();
+      ctx.strokeStyle = "#da7756";
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = "round";
+      state.speedHistory.forEach((speed, index) => {
+        const x = index / (state.speedHistory.length - 1) * width;
+        const y = height - speed / max * height;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.lineTo(width, height);
+      ctx.lineTo(0, height);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+
+    function toggleHistory(show) {
+      els.historyModal.classList.toggle("active", show);
+    }
+
+    function formatLatency(value) {
+      return typeof value === "number" ? `${value.toFixed(0)} ms` : "-";
+    }
+
+    function formatStatus(status) {
+      const map = {
+        running: "测速中",
+        completed: "已完成",
+        failed: "失败",
+      };
+      return map[status] || status;
+    }
+
+    function formatTime(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
+
+    function roundMetric(value) {
+      return Math.round((Number(value) || 0) * 10) / 10;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => window.setTimeout(resolve, ms));
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
+</body>
+</html>
