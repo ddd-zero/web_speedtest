@@ -244,7 +244,7 @@ mod tests {
 
         assert!(html.contains("多域名网络测速"));
         assert!(html.contains("width: min(920px, 100%)"));
-        assert!(html.contains("@media (max-width: 720px)"));
+        assert!(!html.contains("@media (max-width: 720px)"));
         assert!(!html.contains("@media (max-width: 860px)"));
         assert!(html.contains("loadConfig()"));
         assert!(html.contains("target-speed-value"));
@@ -275,6 +275,10 @@ mod tests {
         assert!(
             !html.contains("grid-template-columns: minmax(0, 1fr) auto auto;"),
             "窄屏列表不应出现三列两行的中间态，避免 560-720px 宽度行高跳变"
+        );
+        assert!(
+            !html.contains("@media (max-width: 720px)"),
+            "720px 是平板/窄桌面宽度，不应触发测速列表布局突变"
         );
         assert!(
             html.contains("target-host-text"),

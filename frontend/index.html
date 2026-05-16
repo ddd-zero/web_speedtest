@@ -263,10 +263,11 @@
 
     .target-host {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
       gap: 6px;
       margin-top: 4px;
+      overflow: hidden;
       color: var(--text-sub);
       font-family: var(--mono-stack);
       font-size: .76rem;
@@ -551,7 +552,7 @@
       text-align: center;
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 560px) {
       body {
         padding: 14px;
       }
@@ -561,13 +562,9 @@
       }
 
       .target-row {
-        grid-template-columns: minmax(0, 1fr) 84px 100px 88px;
+        grid-template-columns: 1fr;
         gap: 8px;
-      }
-
-      .target-host {
-        flex-wrap: nowrap;
-        overflow: hidden;
+        align-items: stretch;
       }
 
       .metric strong,
@@ -578,16 +575,10 @@
       .target-row button {
         padding: 10px 12px;
       }
-    }
-
-    @media (max-width: 560px) {
-      .topbar,
-      .target-row {
-        grid-template-columns: 1fr;
-      }
 
       .topbar {
         display: grid;
+        grid-template-columns: 1fr;
       }
 
       .top-actions {
@@ -616,10 +607,6 @@
 
       .modal-header {
         padding: 14px 12px;
-      }
-
-      .target-row {
-        align-items: stretch;
       }
 
       .metric {
