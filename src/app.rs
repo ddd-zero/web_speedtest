@@ -535,6 +535,80 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_center_history_close_button_and_add_press_motion() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".close-btn {\n      display: inline-grid;\n      place-items: center;"),
+            "关闭按钮应使用独立居中布局，让 × 位于圆形按钮正中心"
+        );
+        assert!(
+            html.contains(".close-btn:hover:not(:disabled)")
+                && html.contains("box-shadow: 0 8px 18px rgba(218, 119, 86, .16);"),
+            "关闭按钮需要 hover 状态反馈"
+        );
+        assert!(
+            html.contains(".close-btn:active:not(:disabled)")
+                && html.contains("transform: translateY(0) scale(0.94);"),
+            "关闭按钮需要点击按压反馈"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_use_five_pixel_padding_in_history_table_cells() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                ".history-table th,\n    .history-table td {\n      padding: 5px;\n    }"
+            ),
+            "测速记录表格的表头、内容和空状态单元格 padding 都应统一为 5px"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_show_history_colo_badge_after_location_and_isp() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("const networkText = [location, cleanText(record.ip_isp)]")
+                && html.contains("<span class=\"history-network-meta\">")
+                && html.contains("${renderHistoryColoBadge(record)}")
+                && html.contains("function renderHistoryColoBadge(record)")
+                && html.contains("class=\"target-colo history-network-colo\""),
+            "历史记录网络环境应把运营商和 COLO 放在地理位置后面，并复用主页 COLO 标签样式"
+        );
+        assert!(
+            !html.contains("history-network-isp"),
+            "历史记录网络环境不应再把运营商和 COLO 单独渲染成第三行"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_use_fixed_widths_for_compact_history_metric_columns() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("<col class=\"history-col-time\">")
+                && html.contains("<col class=\"history-col-domain\">")
+                && html.contains("<col class=\"history-col-latency\">")
+                && html.contains("<col class=\"history-col-speed\">")
+                && html.contains("<col class=\"history-col-network\">"),
+            "测速记录列宽应通过命名 col 控制，避免继续使用平均百分比分配"
+        );
+        assert!(
+            html.contains(
+                ".history-col-time {\n      width: 118px;\n    }\n\n    .history-col-latency {\n      width: 96px;\n    }\n\n    .history-col-speed {\n      width: 112px;\n    }"
+            ),
+            "时间、HTTPS 和下载速度列应使用更窄的固定宽度"
+        );
+        assert!(
+            !html.contains("<col style=\"width: 16%\">"),
+            "测速记录表格不应继续使用旧的百分比列宽"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_hide_internal_domain_key_in_history_rows() {
         let html = super::embedded_index_html();
 

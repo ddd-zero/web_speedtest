@@ -432,7 +432,7 @@
     }
 
     .modal-content {
-      width: min(980px, calc(100vw - 48px));
+      width: min(835px, calc(100vw - 48px));
       height: min(760px, calc(100dvh - 48px));
       box-sizing: border-box;
       overflow: hidden;
@@ -502,6 +502,8 @@
     }
 
     .close-btn {
+      display: inline-grid;
+      place-items: center;
       width: 36px;
       height: 36px;
       padding: 0;
@@ -509,8 +511,27 @@
       color: #777;
       background: #f7f3ee;
       border: 1px solid #eadfd7;
-      font-size: 1.5rem;
+      font-size: 1.45rem;
       line-height: 1;
+      transition:
+        transform .16s ease,
+        background .16s ease,
+        border-color .16s ease,
+        color .16s ease,
+        box-shadow .16s ease;
+    }
+
+    .close-btn:hover:not(:disabled) {
+      color: var(--accent);
+      background: #fff4ed;
+      border-color: rgba(218, 119, 86, .35);
+      box-shadow: 0 8px 18px rgba(218, 119, 86, .16);
+      transform: translateY(-1px) scale(1.03);
+    }
+
+    .close-btn:active:not(:disabled) {
+      box-shadow: 0 4px 10px rgba(218, 119, 86, .16);
+      transform: translateY(0) scale(0.94);
     }
 
     .history-toolbar {
@@ -546,6 +567,26 @@
       font-size: .84rem;
     }
 
+    .history-col-time {
+      width: 118px;
+    }
+
+    .history-col-latency {
+      width: 96px;
+    }
+
+    .history-col-speed {
+      width: 112px;
+    }
+
+    .history-col-domain {
+      width: 30%;
+    }
+
+    .history-col-network {
+      width: auto;
+    }
+
     th {
       position: sticky;
       top: 0;
@@ -568,6 +609,11 @@
 
     tr:hover td {
       background: #fffdf9;
+    }
+
+    .history-table th,
+    .history-table td {
+      padding: 5px;
     }
 
     .col-speed {
@@ -597,13 +643,27 @@
     }
 
     .history-latency-jitter,
-    .history-network-location,
-    .history-network-isp {
+    .history-network-location {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       color: var(--text-sub);
       font-size: .76rem;
+    }
+
+    .history-network-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .history-network-location {
+      min-width: 0;
+    }
+
+    .history-network-colo {
+      flex: 0 0 auto;
     }
 
     .history-domain-cell {
@@ -804,11 +864,11 @@
       <div class="table-container">
         <table class="history-table">
           <colgroup>
-            <col style="width: 16%">
-            <col style="width: 27%">
-            <col style="width: 14%">
-            <col style="width: 15%">
-            <col style="width: 28%">
+            <col class="history-col-time">
+            <col class="history-col-domain">
+            <col class="history-col-latency">
+            <col class="history-col-speed">
+            <col class="history-col-network">
           </colgroup>
           <thead>
             <tr>
@@ -1465,15 +1525,24 @@
         .map(cleanText)
         .filter(Boolean)
         .join(" ");
-      const ispAndColo = [record.ip_isp, record.colo]
+      const networkText = [location, cleanText(record.ip_isp)]
         .map(cleanText)
         .filter(Boolean)
-        .join(" · ");
+        .join(" ");
       return `<div class="history-network-cell">
         <span class="history-network-ip">${escapeHtml(record.client_ip || "未知")}</span>
-        <span class="history-network-location">${escapeHtml(location || "未知")}</span>
-        <span class="history-network-isp">${escapeHtml(ispAndColo || "-")}</span>
+        <span class="history-network-meta">
+          <span class="history-network-location">${escapeHtml(networkText || "未知")}</span>
+          ${renderHistoryColoBadge(record)}
+        </span>
       </div>`;
+    }
+
+    function renderHistoryColoBadge(record) {
+      const colo = cleanText(record.colo);
+      if (!colo) return "";
+      const color = colorForColo(colo);
+      return `<span class="target-colo history-network-colo" style="--colo-bg:${color.bg};--colo-fg:${color.fg};--colo-ring:${color.ring}">${escapeHtml(colo)}</span>`;
     }
 
     function findRecommendedTargetKey() {
