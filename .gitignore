@@ -1,3 +1,4 @@
 /target
+node_modules/
 .superpowers/
 speed_results.sqlite3

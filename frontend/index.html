@@ -536,21 +536,40 @@
 
     .history-toolbar {
       display: grid;
-      grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.35fr) auto;
+      grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto;
       padding: 14px 20px;
       background: #fbfaf8;
     }
 
     .search-input,
     .search-select {
-      min-width: 132px;
+      min-width: 0;
+      width: 100%;
       flex: 1;
+      box-sizing: border-box;
       padding: 10px 12px;
       border: 1px solid #ddd6ce;
       border-radius: 10px;
       font-family: var(--font-stack);
       font-size: .9rem;
       background: #fff;
+    }
+
+    .search-select {
+      appearance: none;
+      padding-right: 36px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background-color: #fff;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #3f342e 50%),
+        linear-gradient(135deg, #3f342e 50%, transparent 50%);
+      background-position:
+        calc(100% - 18px) 50%,
+        calc(100% - 12px) 50%;
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
     }
 
     .table-container {
@@ -856,7 +875,12 @@
           <h2 class="modal-title" id="history-title">测速记录</h2>
           <div class="history-subtitle">按域名、IP、位置、运营商或节点查询最近测速结果</div>
         </div>
-        <button class="close-btn" id="close-history-btn" type="button" aria-label="关闭">&times;</button>
+        <button class="close-btn" id="close-history-btn" type="button" aria-label="关闭">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
       <div class="history-toolbar">
         <select id="history-domain" class="search-select">
@@ -880,7 +904,7 @@
               <th>域名</th>
               <th class="col-latency">HTTPS</th>
               <th style="text-align:right">下载速度</th>
-              <th class="col-network">网络环境</th>
+              <th class="col-network">访问来源</th>
             </tr>
           </thead>
           <tbody id="history-body"></tbody>
@@ -1529,10 +1553,8 @@
         .map(cleanText)
         .filter(Boolean)
         .join(" ");
-      const networkText = [location, cleanText(record.ip_isp)]
-        .map(cleanText)
-        .filter(Boolean)
-        .join(" ");
+      const isp = cleanText(record.ip_isp);
+      const networkText = location && isp ? `${location} · ${isp}` : location || isp;
       return `<div class="history-network-cell">
         <span class="history-network-ip">${escapeHtml(record.client_ip || "未知")}</span>
         <span class="history-network-meta">

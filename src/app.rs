@@ -362,7 +362,7 @@ mod tests {
 
         let html = super::embedded_index_html();
 
-        assert!(html.contains("多域名网络测速"));
+        assert!(html.contains("网络测速"));
         assert!(html.contains("width: min(835px, 100%)"));
         assert!(html.contains("@media (max-width: 640px)"));
         assert!(!html.contains("@media (max-width: 560px)"));
@@ -503,7 +503,7 @@ mod tests {
         assert!(html.contains("border-radius: 999px"));
         assert!(html.contains("class=\"history-toolbar\""));
         assert!(!html.contains("class=\"history-status-pill"));
-        assert!(html.contains("width: min(980px, calc(100vw - 48px))"));
+        assert!(html.contains("width: min(835px, calc(100vw - 48px))"));
         assert!(html.contains("height: min(760px, calc(100dvh - 48px))"));
         assert!(html.contains("      box-sizing: border-box;\n      overflow: hidden;"));
         assert!(html.contains("scrollbar-gutter: stable"));
@@ -555,29 +555,29 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_use_five_pixel_padding_in_history_table_cells() {
+    fn embedded_index_html_should_use_ten_pixel_padding_in_history_table_cells() {
         let html = super::embedded_index_html();
 
         assert!(
             html.contains(
-                ".history-table th,\n    .history-table td {\n      padding: 5px;\n    }"
+                ".history-table th,\n    .history-table td {\n      padding: 10px;\n    }"
             ),
-            "测速记录表格的表头、内容和空状态单元格 padding 都应统一为 5px"
+            "测速记录表格的表头、内容和空状态单元格 padding 都应统一为 10px"
         );
     }
 
     #[test]
-    fn embedded_index_html_should_space_history_network_column_semantically() {
+    fn embedded_index_html_should_label_and_space_history_source_column_semantically() {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("<th class=\"col-network\">网络环境</th>")
+            html.contains("<th class=\"col-network\">访问来源</th>")
                 && html.contains("<td class=\"col-network\">${renderHistoryNetwork(record)}</td>"),
-            "历史记录网络环境列应使用语义化 class 标记，而不是依赖列序号选择器"
+            "历史记录访问来源列应使用贴近内容的表头，并通过语义化 class 标记"
         );
         assert!(
-            html.contains(".history-table .col-network {\n      padding-left: 16px;\n    }"),
-            "网络环境列应通过专属 class 增加左侧留白，拉开与下载速度列的距离"
+            html.contains(".history-table .col-network {\n      padding-left: 13px;\n    }"),
+            "访问来源列应通过专属 class 增加左侧留白，拉开与下载速度列的距离"
         );
     }
 
@@ -586,12 +586,13 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("const networkText = [location, cleanText(record.ip_isp)]")
+            html.contains("const isp = cleanText(record.ip_isp);")
+                && html.contains("const networkText = location && isp ? `${location} · ${isp}` : location || isp;")
                 && html.contains("<span class=\"history-network-meta\">")
                 && html.contains("${renderHistoryColoBadge(record)}")
                 && html.contains("function renderHistoryColoBadge(record)")
                 && html.contains("class=\"target-colo history-network-colo\""),
-            "历史记录网络环境应把运营商和 COLO 放在地理位置后面，并复用主页 COLO 标签样式"
+            "历史记录访问来源应把运营商用中点接在地理位置后面，并复用主页 COLO 标签样式"
         );
         assert!(
             !html.contains("history-network-isp"),
@@ -613,13 +614,34 @@ mod tests {
         );
         assert!(
             html.contains(
-                ".history-col-time {\n      width: 118px;\n    }\n\n    .history-col-latency {\n      width: 96px;\n    }\n\n    .history-col-speed {\n      width: 112px;\n    }"
+                ".history-col-time {\n      width: 118px;\n    }\n\n    .history-col-latency {\n      width: 96px;\n    }\n\n    .history-col-speed {\n      width: 100px;\n    }"
             ),
             "时间、HTTPS 和下载速度列应使用更窄的固定宽度"
         );
         assert!(
             !html.contains("<col style=\"width: 16%\">"),
             "测速记录表格不应继续使用旧的百分比列宽"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_limit_native_history_domain_select_width() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto;"),
+            "历史筛选栏应限制域名下拉框宽度，让搜索框承接剩余空间"
+        );
+        assert!(
+            html.contains("box-sizing: border-box;")
+                && html.contains("width: 100%;")
+                && html.contains("min-width: 0;"),
+            "筛选控件应在 grid 轨道内收缩，避免 Firefox 原生 select 撑出多余空白"
+        );
+        assert!(
+            html.contains(".search-select {\n      appearance: none;")
+                && html.contains("background-position:\n        calc(100% - 18px) 50%,\n        calc(100% - 12px) 50%;"),
+            "域名下拉框应自绘箭头，减少 Chrome 与 Firefox 原生外观差异"
         );
     }
 

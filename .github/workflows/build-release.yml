@@ -1,0 +1,178 @@
+name: 构建与发布
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的标签（例如 v0.1.0）"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  BIN_NAME: web_speed
+  TARGET: x86_64-unknown-linux-musl
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux-amd64:
+    name: 编译 Linux amd64 ${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: 普通
+            artifact: web_speed-linux-amd64
+            rustflags: -C target-cpu=x86-64 -C target-feature=-avx,-avx2,-avx512f,-avx512bw,-avx512cd,-avx512dq,-avx512vl
+          - variant: AVX2
+            artifact: web_speed-linux-amd64-avx2
+            rustflags: -C target-cpu=x86-64-v3
+          - variant: AVX512
+            artifact: web_speed-linux-amd64-avx512
+            rustflags: -C target-cpu=x86-64-v4
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+
+      - name: 配置 Rust 缓存
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-amd64-${{ matrix.artifact }}
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: 安装前端处理依赖
+        shell: bash
+        run: npm ci
+
+      - name: 安装 musl 编译依赖
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools
+
+      - name: 处理内嵌前端页面
+        shell: bash
+        run: npm run process:index
+
+      - name: 编译并打包
+        shell: bash
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          RUSTFLAGS_OVERRIDE: ${{ matrix.rustflags }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist package
+
+          export RUSTFLAGS="${RUSTFLAGS_OVERRIDE}"
+          cargo build --release --locked --target "${TARGET}"
+
+          install -m 0755 "target/${TARGET}/release/${BIN_NAME}" "package/${BIN_NAME}"
+          install -m 0644 "config.example.toml" "package/config.example.toml"
+          tar -czf "dist/${ARTIFACT}.tar.gz" -C package "${BIN_NAME}" "config.example.toml"
+          (cd dist && sha256sum "${ARTIFACT}.tar.gz" > "${ARTIFACT}.tar.gz.sha256")
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: 创建或更新 GitHub Release
+    runs-on: ubuntu-24.04
+    needs: build-linux-amd64
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: 解析发布标签
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "${tag}" != v* ]]; then
+            echo "发布标签必须以 v 开头，例如 v0.1.0" >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: 汇总待发布文件
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          find dist -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec cp {} upload/ \;
+
+          asset_count="$(find upload -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')"
+          if [[ "${asset_count}" -eq 0 ]]; then
+            echo "没有可发布的二进制产物" >&2
+            exit 1
+          fi
+
+      - name: 创建或更新 Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -t release_assets < <(find upload -maxdepth 1 -type f -name '*.tar.gz' -printf '%f\n' | sort)
+
+          ordered_files=()
+          for asset in "${release_assets[@]}"; do
+            checksum="upload/${asset}.sha256"
+            if [[ ! -f "${checksum}" ]]; then
+              echo "缺少校验文件: ${checksum}" >&2
+              exit 1
+            fi
+            ordered_files+=("upload/${asset}" "${checksum}")
+          done
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${ordered_files[@]}" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "${ordered_files[@]}" --title "${RELEASE_TAG}" --generate-notes --target "${GITHUB_SHA}"
+          fi
