@@ -1,4 +1,13 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    path::PathBuf,
+    process::ExitCode,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use axum::{
     Json, Router,
@@ -7,18 +16,22 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
 };
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::{ConfigError, RuntimeConfig, TestSettings, TestTarget},
-    models::{LatencyStats, ResultStatus, SaveResultResponse},
+    config::{ConfigError, HistorySettings, RuntimeConfig, TestSettings, TestTarget},
+    models::SaveResultResponse,
     store::{QueryFilter, SaveResultInput, SpeedStore, StoreError},
 };
+
+const IN_MEMORY_UPDATE_TOKEN_TTL_SECS: i64 = 30;
 
 #[derive(Clone)]
 pub struct AppState {
     store: SpeedStore,
     config: RuntimeConfig,
+    update_tokens: UpdateTokenStore,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -41,11 +54,10 @@ struct ErrorResponse {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
-            Self::Store(StoreError::MissingUpdateToken)
-            | Self::Store(StoreError::InvalidUpdateToken)
-            | Self::UnknownTarget(_) => StatusCode::BAD_REQUEST,
-            Self::Store(StoreError::Json(_))
-            | Self::Store(StoreError::Database(_))
+            Self::Store(StoreError::InvalidUpdateToken) | Self::UnknownTarget(_) => {
+                StatusCode::BAD_REQUEST
+            }
+            Self::Store(StoreError::Database(_))
             | Self::Store(StoreError::LockPoisoned)
             | Self::Config(_)
             | Self::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -61,25 +73,32 @@ impl IntoResponse for AppError {
     }
 }
 
+pub fn exit_code_for_error(error: &AppError) -> ExitCode {
+    match error {
+        AppError::Config(_) => ExitCode::from(78),
+        _ => ExitCode::FAILURE,
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SaveResultRequest {
     pub id: Option<i64>,
     pub update_token: Option<String>,
-    pub domain_key: String,
-    pub https_latency: LatencyStats,
-    pub partial_download_mbps: Option<f64>,
-    pub final_download_mbps: Option<f64>,
-    pub status: ResultStatus,
+    pub domain: String,
+    pub https_latency_ms: f64,
+    pub https_jitter_ms: f64,
+    pub download_mbps: f64,
     pub client_ip: Option<String>,
-    pub location: Option<String>,
-    pub isp: Option<String>,
+    pub ip_country: Option<String>,
+    pub ip_region: Option<String>,
+    pub ip_city: Option<String>,
+    pub ip_isp: Option<String>,
     pub colo: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ResultsQuery {
     pub domain: Option<String>,
-    pub status: Option<ResultStatus>,
     pub q: Option<String>,
     pub limit: Option<usize>,
 }
@@ -88,12 +107,14 @@ pub struct ResultsQuery {
 pub struct ClientConfig {
     pub targets: Vec<TestTarget>,
     pub test: TestSettings,
+    pub history: HistorySettings,
 }
 
 pub fn build_router(store: SpeedStore, runtime_config: RuntimeConfig) -> Router {
     let state = AppState {
         store,
         config: runtime_config,
+        update_tokens: UpdateTokenStore::default(),
     };
     Router::new()
         .route("/", get(index))
@@ -126,6 +147,7 @@ async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
     Json(ClientConfig {
         targets: state.config.targets.clone(),
         test: state.config.test.clone(),
+        history: state.config.history.clone(),
     })
 }
 
@@ -143,40 +165,119 @@ async fn save_result(
         .config
         .targets
         .iter()
-        .find(|target| target.key == payload.domain_key)
+        .find(|target| target.host == payload.domain)
         .cloned()
-        .ok_or_else(|| AppError::UnknownTarget(payload.domain_key.clone()))?;
-    let client_ip = extract_client_ip(&headers, addr, payload.client_ip.as_deref());
+        .ok_or_else(|| AppError::UnknownTarget(payload.domain.clone()))?;
+    let _ = (headers, addr);
+    let client_ip = payload.client_ip.as_deref().and_then(parse_ip_candidate);
     let input = SaveResultInput {
         id: payload.id,
-        update_token: payload.update_token,
-        domain_key: target.key,
-        domain_host: target.host,
-        trace_url: target.trace_url,
-        download_url: target.download_url,
-        https_latency: payload.https_latency,
-        partial_download_mbps: payload.partial_download_mbps,
-        final_download_mbps: payload.final_download_mbps,
-        status: payload.status,
+        domain: target.host,
+        https_latency_ms: payload.https_latency_ms,
+        https_jitter_ms: payload.https_jitter_ms,
+        download_mbps: payload.download_mbps,
         client_ip,
-        location: payload.location,
-        isp: payload.isp,
+        ip_country: clean_optional(payload.ip_country),
+        ip_region: clean_optional(payload.ip_region),
+        ip_city: clean_optional(payload.ip_city),
+        ip_isp: clean_optional(payload.ip_isp),
         colo: payload.colo,
     };
 
-    Ok(Json(state.store.save_result(input)?))
+    if let Some(id) = payload.id {
+        let token = payload.update_token.as_deref().unwrap_or_default();
+        state.update_tokens.validate_and_remove(id, token)?;
+        state.store.save_result(input)?;
+        Ok(Json(SaveResultResponse {
+            id,
+            update_token: token.to_string(),
+        }))
+    } else {
+        let id = state.store.save_result(input)?;
+        Ok(Json(SaveResultResponse {
+            id,
+            update_token: state.update_tokens.create(id),
+        }))
+    }
 }
 
 async fn results(
     State(state): State<AppState>,
     Query(query): Query<ResultsQuery>,
 ) -> Result<Json<Vec<crate::models::PublicSpeedRecord>>, AppError> {
+    let limit = state.config.history.resolve_limit(query.limit);
     Ok(Json(state.store.query_results(QueryFilter {
         domain: query.domain,
-        status: query.status,
         q: query.q,
-        limit: query.limit,
+        limit,
     })?))
+}
+
+#[derive(Clone, Default)]
+struct UpdateTokenStore {
+    tokens: Arc<Mutex<HashMap<i64, PendingUpdateToken>>>,
+    sequence: Arc<AtomicU64>,
+}
+
+struct PendingUpdateToken {
+    token: String,
+    expires_at: DateTime<Utc>,
+}
+
+impl UpdateTokenStore {
+    fn create(&self, id: i64) -> String {
+        let mut tokens = self.tokens.lock().expect("更新令牌锁不应损坏");
+        Self::cleanup_expired_locked(&mut tokens);
+        let token = self.next_token();
+        tokens.insert(
+            id,
+            PendingUpdateToken {
+                token: token.clone(),
+                expires_at: Utc::now() + Duration::seconds(IN_MEMORY_UPDATE_TOKEN_TTL_SECS),
+            },
+        );
+        token
+    }
+
+    fn validate_and_remove(&self, id: i64, token: &str) -> Result<(), StoreError> {
+        let mut tokens = self.tokens.lock().map_err(|_| StoreError::LockPoisoned)?;
+        Self::cleanup_expired_locked(&mut tokens);
+        let Some(current) = tokens.get(&id) else {
+            return Err(StoreError::InvalidUpdateToken);
+        };
+        if current.token != token {
+            return Err(StoreError::InvalidUpdateToken);
+        }
+        tokens.remove(&id);
+        Ok(())
+    }
+
+    fn next_token(&self) -> String {
+        let sequence = self.sequence.fetch_add(1, Ordering::Relaxed);
+        let nanos = Utc::now()
+            .timestamp_nanos_opt()
+            .unwrap_or_else(|| Utc::now().timestamp_micros());
+        format!("{nanos:x}{sequence:x}")
+    }
+
+    fn cleanup_expired_locked(tokens: &mut HashMap<i64, PendingUpdateToken>) {
+        let now = Utc::now();
+        tokens.retain(|_, pending| pending.expires_at > now);
+    }
+
+    #[cfg(test)]
+    fn create_expired_for_test(&self, id: i64) -> String {
+        let token = self.next_token();
+        let mut tokens = self.tokens.lock().expect("更新令牌锁不应损坏");
+        tokens.insert(
+            id,
+            PendingUpdateToken {
+                token: token.clone(),
+                expires_at: Utc::now() - Duration::seconds(1),
+            },
+        );
+        token
+    }
 }
 
 pub fn extract_client_ip(
@@ -210,11 +311,30 @@ fn parse_ip_candidate(value: &str) -> Option<String> {
         .map(|ip| ip.to_string())
 }
 
+fn clean_optional(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::extract_client_ip;
+    use super::{AppError, exit_code_for_error, extract_client_ip};
+    use crate::config::ConfigError;
     use axum::http::HeaderMap;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        process::ExitCode,
+    };
+
+    #[test]
+    fn exit_code_for_error_should_return_config_code_for_domain_config_errors() {
+        let error = AppError::Config(ConfigError::MissingDomainPath);
+
+        let code = exit_code_for_error(&error);
+
+        assert_eq!(code, ExitCode::from(78));
+    }
 
     #[test]
     fn extract_client_ip_should_prefer_valid_reported_ip() {
@@ -243,7 +363,7 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(html.contains("多域名网络测速"));
-        assert!(html.contains("width: min(920px, 100%)"));
+        assert!(html.contains("width: min(835px, 100%)"));
         assert!(html.contains("@media (max-width: 640px)"));
         assert!(!html.contains("@media (max-width: 560px)"));
         assert!(!html.contains("@media (max-width: 720px)"));
@@ -268,6 +388,16 @@ mod tests {
         assert!(!html.contains("colo-info"));
         assert!(!html.contains("边缘节点"));
         assert!(!html.contains("searchParams.set(\"_\""));
+        assert!(html.contains("https://myip.ipip.net/json"));
+        assert!(html.contains("runLatencyRounds({ discardFirstRound: true })"));
+        assert!(html.contains("https_jitter_ms"));
+        assert!(html.contains("download_mbps"));
+        assert!(html.contains("renderHistoryNetwork(record)"));
+        assert!(html.contains("搜索域名 / IP / 位置 / 运营商 / 节点"));
+        assert!(!html.contains("partial_download_mbps"));
+        assert!(!html.contains("final_download_mbps"));
+        assert!(!html.contains("https_latency_median_ms"));
+        assert!(!html.contains("min ${stats.min_ms"));
     }
 
     #[test]
@@ -372,7 +502,7 @@ mod tests {
         assert!(html.contains("right: 20px"));
         assert!(html.contains("border-radius: 999px"));
         assert!(html.contains("class=\"history-toolbar\""));
-        assert!(html.contains("class=\"history-status-pill"));
+        assert!(!html.contains("class=\"history-status-pill"));
         assert!(html.contains("width: min(980px, calc(100vw - 48px))"));
         assert!(html.contains("height: min(760px, calc(100dvh - 48px))"));
         assert!(html.contains("      box-sizing: border-box;\n      overflow: hidden;"));
@@ -402,5 +532,84 @@ mod tests {
         assert!(!html.contains("backdrop-filter"));
         assert!(!html.contains("history-bounce-in"));
         assert!(!html.contains("<button class=\"btn-secondary\" id=\"history-btn\""));
+    }
+
+    #[test]
+    fn embedded_index_html_should_hide_internal_domain_key_in_history_rows() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("historyTargetLabel(record)")
+                && html.contains("historyTargetHost(record)")
+                && !html.contains("escapeHtml(record.domain_key)</span>"),
+            "历史表应展示用户可识别的线路名称和域名，不应把内部 domain_key 当作可见信息"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_not_render_history_status_controls() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            !html.contains("id=\"history-status\"")
+                && !html.contains("renderHistoryStatus")
+                && !html.contains("historyStatusDescription")
+                && !html.contains("params.set(\"status\""),
+            "历史记录不应再暴露或查询运行/完成/失败状态"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_randomize_colo_tag_colors_without_gray_palette() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("randomColoPaletteIndex()")
+                && html.contains("Math.random()")
+                && !html.contains(r##"{ bg: "#f1f4f8", fg: "#506176", ring: "#d8e0ea" }"##)
+                && !html.contains("function hashString"),
+            "COLO 节点标签颜色应随机分配，且不再使用灰色标签配色"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_support_one_click_download_sequence() {
+        let html = super::embedded_index_html();
+        let one_click_button = html
+            .find("id=\"one-click-download-btn\"")
+            .expect("页面应渲染一键测速按钮");
+        let refresh_button = html
+            .find("id=\"refresh-latency-btn\"")
+            .expect("页面应渲染重测延迟按钮");
+
+        assert!(
+            one_click_button < refresh_button,
+            "一键测速按钮应放在重测延迟左侧"
+        );
+        assert!(html.contains("一键测速"));
+        assert!(html.contains("const ONE_CLICK_DOWNLOAD_TEST_MS = 6000"));
+        assert!(html.contains("runOneClickDownloadSequence()"));
+        assert!(html.contains("oneClickDownloadTargets()"));
+        assert!(html.contains("sortedTargetsForRender()"));
+        assert!(html.contains("targetState.status === \"ready\""));
+        assert!(html.contains("targetState?.status !== \"failed\""));
+        assert!(html.contains("startDownloadTest(target.key, ONE_CLICK_DOWNLOAD_TEST_MS)"));
+    }
+
+    #[test]
+    fn update_token_store_should_validate_once_and_release_token() {
+        let store = super::UpdateTokenStore::default();
+        let token = store.create(42);
+
+        assert!(store.validate_and_remove(42, &token).is_ok());
+        assert!(store.validate_and_remove(42, &token).is_err());
+    }
+
+    #[test]
+    fn update_token_store_should_reject_expired_token() {
+        let store = super::UpdateTokenStore::default();
+        let token = store.create_expired_for_test(42);
+
+        assert!(store.validate_and_remove(42, &token).is_err());
     }
 }

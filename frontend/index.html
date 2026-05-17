@@ -46,7 +46,7 @@
     }
 
     .layout {
-      width: min(920px, 100%);
+      width: min(835px, 100%);
       height: 100%;
       min-height: 0;
       margin: 0 auto;
@@ -515,7 +515,7 @@
 
     .history-toolbar {
       display: grid;
-      grid-template-columns: minmax(150px, 1fr) minmax(132px, .75fr) minmax(220px, 1.35fr) auto;
+      grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.35fr) auto;
       padding: 14px 20px;
       background: #fbfaf8;
     }
@@ -578,10 +578,32 @@
       white-space: nowrap;
     }
 
-    .col-ip,
     .col-latency {
       font-family: var(--mono-stack);
       white-space: nowrap;
+    }
+
+    .history-latency-cell,
+    .history-network-cell {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .history-latency-main,
+    .history-network-ip {
+      font-family: var(--mono-stack);
+      font-weight: 800;
+    }
+
+    .history-latency-jitter,
+    .history-network-location,
+    .history-network-isp {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-sub);
+      font-size: .76rem;
     }
 
     .history-domain-cell {
@@ -590,53 +612,38 @@
       min-width: 0;
     }
 
+    .history-domain-label,
     .history-domain-host {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .history-domain-label {
       font-weight: 700;
     }
 
-    .history-domain-key {
-      width: fit-content;
-      max-width: 100%;
+    .history-domain-host {
+      color: var(--text-sub);
+      font-family: var(--mono-stack);
+      font-size: .76rem;
+    }
+
+    .target-cname {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      max-width: 180px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       border-radius: 999px;
-      padding: 2px 8px;
-      color: #9c5c4d;
-      background: rgba(218, 119, 86, .12);
+      padding: 2px 7px;
+      color: #506176;
+      background: #f1f4f8;
       font-family: var(--mono-stack);
-      font-size: .72rem;
+      font-size: .7rem;
       font-weight: 800;
-    }
-
-    .history-status-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 58px;
-      border-radius: 999px;
-      padding: 4px 9px;
-      font-size: .76rem;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    .history-status-pill.completed {
-      color: #247247;
-      background: #e7f6ed;
-    }
-
-    .history-status-pill.failed {
-      color: #a44b3f;
-      background: #fbece8;
-    }
-
-    .history-status-pill.running {
-      color: #8a5d00;
-      background: #fff2cc;
     }
 
     .empty-row {
@@ -746,6 +753,7 @@
           <div class="subline">自动多轮检测 HTTPS 延迟，点击域名单线程下载测速。</div>
         </div>
         <div class="top-actions">
+          <button class="btn-primary" id="one-click-download-btn" type="button" disabled>一键测速</button>
           <button class="btn-secondary" id="refresh-latency-btn" type="button">重测延迟</button>
         </div>
       </div>
@@ -756,7 +764,7 @@
           <span class="value" id="client-ip">待检测</span>
         </div>
         <div class="info-row">
-          <span class="label">IP 查询</span>
+          <span class="label">位置</span>
           <span class="value" id="client-location">API 待接入</span>
         </div>
         <div class="info-row">
@@ -782,7 +790,7 @@
       <div class="modal-header">
         <div>
           <h2 class="modal-title" id="history-title">测速记录</h2>
-          <div class="history-subtitle">按线路、状态或节点查询最近测速结果</div>
+          <div class="history-subtitle">按域名、IP、位置、运营商或节点查询最近测速结果</div>
         </div>
         <button class="close-btn" id="close-history-btn" type="button" aria-label="关闭">&times;</button>
       </div>
@@ -790,33 +798,25 @@
         <select id="history-domain" class="search-select">
           <option value="">全部域名</option>
         </select>
-        <select id="history-status" class="search-select">
-          <option value="">全部状态</option>
-          <option value="running">测速中</option>
-          <option value="completed">已完成</option>
-          <option value="failed">失败</option>
-        </select>
-        <input id="history-query" class="search-input" placeholder="搜索位置 / 运营商 / 节点">
+        <input id="history-query" class="search-input" placeholder="搜索域名 / IP / 位置 / 运营商 / 节点">
         <button class="btn-primary" id="query-history-btn" type="button">查询</button>
       </div>
       <div class="table-container">
         <table class="history-table">
           <colgroup>
-            <col style="width: 17%">
-            <col style="width: 30%">
-            <col style="width: 10%">
-            <col style="width: 10%">
-            <col style="width: 18%">
+            <col style="width: 16%">
+            <col style="width: 27%">
+            <col style="width: 14%">
             <col style="width: 15%">
+            <col style="width: 28%">
           </colgroup>
           <thead>
             <tr>
               <th>时间</th>
               <th>域名</th>
               <th class="col-latency">HTTPS</th>
-              <th>状态</th>
-              <th class="col-ip">IP</th>
               <th style="text-align:right">下载速度</th>
+              <th>网络环境</th>
             </tr>
           </thead>
           <tbody id="history-body"></tbody>
@@ -827,7 +827,9 @@
 
   <script>
     const SMOOTHING = 0.3;
+    const IP_LOOKUP_URL = "https://myip.ipip.net/json";
     const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
+    const ONE_CLICK_DOWNLOAD_TEST_MS = 6000;
     const HISTORY_CLOSE_ANIMATION_MS = 220;
     const COLO_PALETTE = [
       { bg: "#eaf2ff", fg: "#205c9d", ring: "#c8ddfa" },
@@ -836,7 +838,6 @@
       { bg: "#fcecef", fg: "#a83f55", ring: "#f3c3ce" },
       { bg: "#eeeafd", fg: "#6750a4", ring: "#d8cff9" },
       { bg: "#e4f7fb", fg: "#147187", ring: "#b9e7f0" },
-      { bg: "#f1f4f8", fg: "#506176", ring: "#d8e0ea" },
       { bg: "#fff0e6", fg: "#a04e20", ring: "#f3c7ad" },
       { bg: "#eaf7e8", fg: "#2f6f3e", ring: "#c8e8c1" },
       { bg: "#f3ecff", fg: "#7b4ab8", ring: "#ddcbfb" },
@@ -854,25 +855,37 @@
         download_test_ms: 8500,
         progress_save_ratio: 0.5,
       },
+      history: {
+        default_limit: 80,
+        max_limit: 200,
+      },
       targetStates: new Map(),
       activeTargetKey: null,
       currentClientIp: "",
+      currentIpInfo: {
+        country: "",
+        region: "",
+        city: "",
+        isp: "",
+      },
       currentColos: new Map(),
       isDownloading: false,
+      isOneClickDownloading: false,
       isHistoryOpen: false,
       downloadController: null,
       stopRequested: false,
+      oneClickStopRequested: false,
     };
 
     const els = {
       targetList: document.getElementById("target-list"),
       latencyStatus: document.getElementById("latency-status"),
+      oneClickDownloadBtn: document.getElementById("one-click-download-btn"),
       refreshLatencyBtn: document.getElementById("refresh-latency-btn"),
       historyBtn: document.getElementById("history-btn"),
       historyModal: document.getElementById("history-modal"),
       closeHistoryBtn: document.getElementById("close-history-btn"),
       historyDomain: document.getElementById("history-domain"),
-      historyStatus: document.getElementById("history-status"),
       historyQuery: document.getElementById("history-query"),
       queryHistoryBtn: document.getElementById("query-history-btn"),
       historyBody: document.getElementById("history-body"),
@@ -883,6 +896,7 @@
 
     window.addEventListener("DOMContentLoaded", init);
 
+    els.oneClickDownloadBtn.addEventListener("click", runOneClickDownloadSequence);
     els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
     els.historyBtn.addEventListener("click", openHistory);
     els.closeHistoryBtn.addEventListener("click", () => toggleHistory(false));
@@ -895,8 +909,8 @@
     });
 
     async function init() {
-      await loadConfig();
-      runLatencyRounds();
+      await Promise.all([loadConfig(), loadClientInfo()]);
+      runLatencyRounds({ discardFirstRound: true });
     }
 
     async function loadConfig() {
@@ -909,6 +923,10 @@
           ...state.test,
           ...(config.test || {}),
         };
+        state.history = {
+          ...state.history,
+          ...(config.history || {}),
+        };
         state.targetStates = new Map(state.targets.map(target => [target.key, createTargetState()]));
         renderHistoryDomainOptions();
         renderTargetList();
@@ -916,6 +934,35 @@
       } catch (error) {
         els.targetList.innerHTML = `<div class="empty-row">${escapeHtml(error.message)}</div>`;
         els.latencyStatus.textContent = "配置加载失败";
+      }
+    }
+
+    async function loadClientInfo() {
+      try {
+        const response = await fetch(IP_LOOKUP_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error(`IP 查询失败: ${response.status}`);
+        const payload = await response.json();
+        const data = payload?.data || {};
+        const location = Array.isArray(data.location) ? data.location : [];
+        if (payload?.ret !== "ok" || !data.ip) throw new Error("IP 查询失败");
+
+        state.currentClientIp = String(data.ip).trim();
+        state.currentIpInfo = {
+          country: cleanText(location[0]),
+          region: cleanText(location[1]),
+          city: cleanText(location[2]),
+          isp: cleanText(location[4]),
+        };
+      } catch (error) {
+        state.currentClientIp = "";
+        state.currentIpInfo = {
+          country: "",
+          region: "",
+          city: "",
+          isp: "",
+        };
+      } finally {
+        updateClientInfo();
       }
     }
 
@@ -935,8 +982,10 @@
       };
     }
 
-    async function runLatencyRounds() {
-      if (!state.targets.length || state.isDownloading) return;
+    async function runLatencyRounds(options = {}) {
+      if (!state.targets.length || state.isDownloading || state.isOneClickDownloading) return;
+      const discardFirstRound = Boolean(options.discardFirstRound);
+      const totalRounds = state.test.latency_rounds + (discardFirstRound ? 1 : 0);
       state.targetStates.forEach(targetState => {
         targetState.samples = [];
         targetState.stats = null;
@@ -946,10 +995,11 @@
         targetState.latencySkipped = false;
       });
       state.currentColos.clear();
-      els.latencyStatus.textContent = renderLatencyProgress(0);
+      els.latencyStatus.textContent = renderLatencyProgress(0, discardFirstRound);
       renderTargetList();
 
-      for (let round = 1; round <= state.test.latency_rounds; round += 1) {
+      for (let round = 1; round <= totalRounds; round += 1) {
+        const isWarmupRound = discardFirstRound && round === 1;
         await Promise.all(state.targets.map(async target => {
           const targetState = state.targetStates.get(target.key);
           if (!targetState || targetState.latencySkipped) return;
@@ -957,17 +1007,15 @@
           const result = await measureHttpsLatency(target);
           if (result.ok) {
             targetState.consecutiveLatencyFailures = 0;
-            targetState.samples.push(result.ms);
+            if (!isWarmupRound) targetState.samples.push(result.ms);
             targetState.status = "testing";
             targetState.error = "";
-            if (result.trace.ip && !state.currentClientIp) {
-              state.currentClientIp = result.trace.ip;
-              updateClientInfo();
-            }
             if (result.trace.colo) {
               state.currentColos.set(target.key, result.trace.colo);
               updateClientInfo();
             }
+          } else if (isWarmupRound) {
+            targetState.error = result.error;
           } else {
             targetState.consecutiveLatencyFailures += 1;
             if (targetState.consecutiveLatencyFailures >= MAX_CONSECUTIVE_LATENCY_FAILURES) {
@@ -985,9 +1033,9 @@
             targetState.stats = summarizeLatency(targetState.samples);
           }
         });
-        els.latencyStatus.textContent = renderLatencyProgress(round);
+        els.latencyStatus.textContent = renderLatencyProgress(round, discardFirstRound);
         renderTargetList();
-        if (round < state.test.latency_rounds) await sleep(140);
+        if (round < totalRounds) await sleep(140);
       }
 
       state.targetStates.forEach(targetState => {
@@ -997,8 +1045,11 @@
       renderTargetList();
     }
 
-    function renderLatencyProgress(round) {
-      return `HTTPS 检测 ${round}/${state.test.latency_rounds} · ${renderLatencySummary()}`;
+    function renderLatencyProgress(round, discardFirstRound = false) {
+      if (discardFirstRound && round === 0) return `HTTPS 预热 · ${renderLatencySummary()}`;
+      if (discardFirstRound && round === 1) return `HTTPS 预热完成 · ${renderLatencySummary()}`;
+      const measuredRound = discardFirstRound ? Math.max(0, round - 1) : round;
+      return `HTTPS 检测 ${measuredRound}/${state.test.latency_rounds} · ${renderLatencySummary()}`;
     }
 
     function renderLatencySummary() {
@@ -1031,9 +1082,38 @@
       }
     }
 
-    async function startDownloadTest(targetKey) {
-      if (state.isDownloading && state.activeTargetKey === targetKey) {
+    async function runOneClickDownloadSequence() {
+      if (state.isOneClickDownloading) {
+        state.oneClickStopRequested = true;
         stopDownloadTest();
+        return;
+      }
+      if (state.isDownloading) return;
+
+      const targets = oneClickDownloadTargets();
+      if (!targets.length) return;
+
+      state.isOneClickDownloading = true;
+      state.oneClickStopRequested = false;
+      syncTopActionButtons();
+      renderTargetList();
+
+      try {
+        for (const target of targets) {
+          if (state.oneClickStopRequested) break;
+          await startDownloadTest(target.key, ONE_CLICK_DOWNLOAD_TEST_MS);
+        }
+      } finally {
+        state.isOneClickDownloading = false;
+        state.oneClickStopRequested = false;
+        syncTopActionButtons();
+        renderTargetList();
+      }
+    }
+
+    async function startDownloadTest(targetKey, downloadTestMs = state.test.download_test_ms) {
+      if (state.isDownloading && state.activeTargetKey === targetKey) {
+        if (!state.isOneClickDownloading) stopDownloadTest();
         return;
       }
       if (state.isDownloading) return;
@@ -1074,7 +1154,7 @@
           const { done, value } = await reader.read();
           const now = performance.now();
           const elapsed = now - started;
-          if (elapsed >= state.test.download_test_ms) {
+          if (elapsed >= downloadTestMs) {
             await reader.cancel();
             break;
           }
@@ -1088,14 +1168,14 @@
               : smoothedSpeed * (1 - SMOOTHING) + instantSpeed * SMOOTHING;
             speedSamples.push(smoothedSpeed);
 
-            updateDownloadUi(targetKey, smoothedSpeed, receivedBytes, progressRatio(elapsed, receivedBytes, contentLength));
+            updateDownloadUi(targetKey, smoothedSpeed, receivedBytes, progressRatio(elapsed, receivedBytes, contentLength, downloadTestMs));
             lastTime = now;
             lastBytes = receivedBytes;
           }
 
-          const progress = progressRatio(elapsed, receivedBytes, contentLength);
+          const progress = progressRatio(elapsed, receivedBytes, contentLength, downloadTestMs);
           if (!savePromise && progress >= state.test.progress_save_ratio) {
-            savePromise = saveRunningResult(targetKey, stableSpeed(speedSamples));
+            savePromise = saveProgressResult(targetKey, stableSpeed(speedSamples));
           }
         }
 
@@ -1105,7 +1185,7 @@
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
-        await finalizeResult(targetKey, finalSpeed, "completed", savedRecord).catch(() => null);
+        await finalizeResult(targetKey, finalSpeed, savedRecord).catch(() => null);
         markDownloadCompleted(targetKey, finalSpeed, receivedBytes);
       } catch (error) {
         const message = state.stopRequested
@@ -1117,7 +1197,7 @@
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
-        await finalizeResult(targetKey, stableSpeed(speedSamples), "failed", savedRecord).catch(() => null);
+        await finalizeResult(targetKey, stableSpeed(speedSamples), savedRecord).catch(() => null);
         markDownloadFailed(targetKey, stableSpeed(speedSamples), receivedBytes, message);
       } finally {
         controller.abort();
@@ -1135,12 +1215,12 @@
       state.downloadController.abort();
     }
 
-    async function saveRunningResult(targetKey, speed) {
-      return saveResult(buildResultPayload(targetKey, speed, "running"));
+    async function saveProgressResult(targetKey, speed) {
+      return saveResult(buildResultPayload(targetKey, speed, false));
     }
 
-    async function finalizeResult(targetKey, speed, status, savedRecord) {
-      const payload = buildResultPayload(targetKey, speed, status);
+    async function finalizeResult(targetKey, speed, savedRecord) {
+      const payload = buildResultPayload(targetKey, speed, true);
       if (savedRecord) {
         payload.id = savedRecord.id;
         payload.update_token = savedRecord.update_token;
@@ -1161,23 +1241,24 @@
       return response.json();
     }
 
-    function buildResultPayload(targetKey, speed, status) {
+    function buildResultPayload(targetKey, speed, isFinal) {
+      const target = state.targets.find(item => item.key === targetKey);
       const targetState = state.targetStates.get(targetKey);
       const stats = targetState?.stats || {
-        median_ms: 0,
-        min_ms: 0,
-        max_ms: 0,
+        latency_ms: 0,
+        jitter_ms: 0,
         samples_ms: [],
       };
       return {
-        domain_key: targetKey,
-        https_latency: stats,
-        partial_download_mbps: status === "running" ? roundMetric(speed) : null,
-        final_download_mbps: status !== "running" ? roundMetric(speed) : null,
-        status,
+        domain: target?.host || targetKey,
+        https_latency_ms: roundMetric(stats.latency_ms),
+        https_jitter_ms: roundMetric(stats.jitter_ms),
+        download_mbps: roundMetric(speed),
         client_ip: state.currentClientIp || null,
-        location: null,
-        isp: null,
+        ip_country: state.currentIpInfo.country || null,
+        ip_region: state.currentIpInfo.region || null,
+        ip_city: state.currentIpInfo.city || null,
+        ip_isp: state.currentIpInfo.isp || null,
         colo: state.currentColos.get(targetKey) || null,
       };
     }
@@ -1188,39 +1269,36 @@
     }
 
     async function loadHistory() {
-      els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="6">加载中...</td></tr>`;
+      els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="5">加载中...</td></tr>`;
       const params = new URLSearchParams();
       if (els.historyDomain.value) params.set("domain", els.historyDomain.value);
-      if (els.historyStatus.value) params.set("status", els.historyStatus.value);
       if (els.historyQuery.value.trim()) params.set("q", els.historyQuery.value.trim());
-      params.set("limit", "80");
 
       try {
         const response = await fetch(`/api/results?${params.toString()}`, { cache: "no-store" });
         if (!response.ok) throw new Error("记录加载失败");
         const records = await response.json();
         if (!records.length) {
-          els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="6">暂无记录</td></tr>`;
+          els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="5">暂无记录</td></tr>`;
           return;
         }
         els.historyBody.innerHTML = records.map(record => {
-          const speed = record.final_download_mbps ?? record.partial_download_mbps ?? 0;
+          const speed = record.download_mbps ?? 0;
           return `<tr>
             <td>${formatTime(record.created_at)}</td>
             <td>
               <div class="history-domain-cell">
-                <span class="history-domain-host">${escapeHtml(record.domain_host)}</span>
-                <span class="history-domain-key">${escapeHtml(record.domain_key)}</span>
+                <span class="history-domain-label">${escapeHtml(historyTargetLabel(record))}</span>
+                <span class="history-domain-host">${escapeHtml(historyTargetHost(record))}</span>
               </div>
             </td>
-            <td class="col-latency">${formatLatency(record.https_latency_median_ms)}</td>
-            <td>${renderHistoryStatus(record.status)}</td>
-            <td class="col-ip">${escapeHtml(record.client_ip || "未知")}</td>
+            <td class="col-latency">${renderHistoryLatency(record)}</td>
             <td class="col-speed">${speed.toFixed(1)} Mbps</td>
+            <td>${renderHistoryNetwork(record)}</td>
           </tr>`;
         }).join("");
       } catch (error) {
-        els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="6">${escapeHtml(error.message)}</td></tr>`;
+        els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="5">${escapeHtml(error.message)}</td></tr>`;
       }
     }
 
@@ -1237,7 +1315,7 @@
         const stats = targetState?.stats;
         const isRecommended = target.key === recommendedKey;
         const isActive = state.activeTargetKey === target.key;
-        const disabled = (state.isDownloading && !isActive) || targetState?.status === "failed";
+        const disabled = state.isOneClickDownloading || (state.isDownloading && !isActive) || targetState?.status === "failed";
         const buttonText = renderDownloadButtonText(targetState);
         const progress = renderDownloadProgress(targetState);
         return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}" data-target-key="${escapeHtml(target.key)}">
@@ -1250,12 +1328,13 @@
             </div>
             <div class="target-host">
               <span class="target-host-text">${escapeHtml(target.host)}</span>
+              ${renderCnameBadge(target.cname)}
               ${renderColoBadge(target.key)}
             </div>
           </div>
           <div class="metric">
-            <strong>${stats ? `${stats.median_ms.toFixed(0)} ms` : "-"}</strong>
-            <span>${stats ? `min ${stats.min_ms.toFixed(0)} / ${stats.samples_ms.length} 次` : targetState?.error || "等待测试"}</span>
+            <strong>${stats ? `${stats.latency_ms.toFixed(0)} ms` : "-"}</strong>
+            <span>${stats ? `抖动 ${stats.jitter_ms.toFixed(0)} ms` : targetState?.error || "等待测试"}</span>
           </div>
           <div class="download-metric">
             <strong class="target-speed-value">${formatNodeSpeed(targetState)}</strong>
@@ -1265,6 +1344,7 @@
         </div>`;
       }).join("");
       els.targetList.innerHTML = header + rows;
+      syncTopActionButtons();
     }
 
     function renderDownloadProgress(targetState) {
@@ -1279,6 +1359,11 @@
       return `<span class="target-colo" style="--colo-bg:${color.bg};--colo-fg:${color.fg};--colo-ring:${color.ring}">${escapeHtml(colo)}</span>`;
     }
 
+    function renderCnameBadge(cname) {
+      if (!cname || cname === "-") return "";
+      return `<span class="target-cname" title="CNAME ${escapeHtml(cname)}">CNAME ${escapeHtml(cname)}</span>`;
+    }
+
     function colorForColo(colo) {
       const key = String(colo || "").trim().toUpperCase();
       if (!key) return COLO_PALETTE[0];
@@ -1286,27 +1371,18 @@
         return COLO_PALETTE[assignedColoColorIndexes.get(key)];
       }
 
-      const usedIndexes = new Set(assignedColoColorIndexes.values());
-      const startIndex = hashString(key) % COLO_PALETTE.length;
-      let colorIndex = startIndex;
-      for (let offset = 0; offset < COLO_PALETTE.length; offset += 1) {
-        const candidate = (startIndex + offset) % COLO_PALETTE.length;
-        if (!usedIndexes.has(candidate)) {
-          colorIndex = candidate;
-          break;
-        }
-      }
+      const colorIndex = randomColoPaletteIndex();
       assignedColoColorIndexes.set(key, colorIndex);
       return COLO_PALETTE[colorIndex];
     }
 
-    function hashString(value) {
-      let hash = 2166136261;
-      for (let index = 0; index < value.length; index += 1) {
-        hash ^= value.charCodeAt(index);
-        hash = Math.imul(hash, 16777619);
-      }
-      return hash >>> 0;
+    function randomColoPaletteIndex() {
+      const usedIndexes = new Set(assignedColoColorIndexes.values());
+      const availableIndexes = COLO_PALETTE
+        .map((_, index) => index)
+        .filter(index => !usedIndexes.has(index));
+      const pool = availableIndexes.length ? availableIndexes : COLO_PALETTE.map((_, index) => index);
+      return pool[Math.floor(Math.random() * pool.length)];
     }
 
     function renderDownloadButtonText(targetState) {
@@ -1359,8 +1435,45 @@
 
     function renderHistoryDomainOptions() {
       els.historyDomain.innerHTML = `<option value="">全部域名</option>` + state.targets
-        .map(target => `<option value="${escapeHtml(target.key)}">${escapeHtml(target.host)}</option>`)
+        .map(target => `<option value="${escapeHtml(target.host)}">${escapeHtml(target.label)} / ${escapeHtml(target.host)}</option>`)
         .join("");
+    }
+
+    function historyTargetLabel(record) {
+      const target = historyTargetForRecord(record);
+      return target?.label || record.domain || "未知域名";
+    }
+
+    function historyTargetHost(record) {
+      const target = historyTargetForRecord(record);
+      return target?.host || record.domain || "未知域名";
+    }
+
+    function historyTargetForRecord(record) {
+      return state.targets.find(target => target.host === record.domain) || null;
+    }
+
+    function renderHistoryLatency(record) {
+      return `<div class="history-latency-cell">
+        <span class="history-latency-main">${formatLatency(record.https_latency_ms)}</span>
+        <span class="history-latency-jitter">抖动 ${formatLatency(record.https_jitter_ms)}</span>
+      </div>`;
+    }
+
+    function renderHistoryNetwork(record) {
+      const location = [record.ip_country, record.ip_region, record.ip_city]
+        .map(cleanText)
+        .filter(Boolean)
+        .join(" ");
+      const ispAndColo = [record.ip_isp, record.colo]
+        .map(cleanText)
+        .filter(Boolean)
+        .join(" · ");
+      return `<div class="history-network-cell">
+        <span class="history-network-ip">${escapeHtml(record.client_ip || "未知")}</span>
+        <span class="history-network-location">${escapeHtml(location || "未知")}</span>
+        <span class="history-network-isp">${escapeHtml(ispAndColo || "-")}</span>
+      </div>`;
     }
 
     function findRecommendedTargetKey() {
@@ -1368,7 +1481,7 @@
         .map(target => ({ key: target.key, stats: state.targetStates.get(target.key)?.stats }))
         .filter(item => item.stats);
       if (!ready.length) return null;
-      ready.sort((a, b) => a.stats.median_ms - b.stats.median_ms);
+      ready.sort((a, b) => a.stats.latency_ms - b.stats.latency_ms);
       return ready[0].key;
     }
 
@@ -1382,12 +1495,26 @@
         .sort((a, b) => {
           const aStats = a.state?.stats;
           const bStats = b.state?.stats;
-          if (aStats && bStats) return aStats.median_ms - bStats.median_ms || a.index - b.index;
+          if (aStats && bStats) return aStats.latency_ms - bStats.latency_ms || a.index - b.index;
           if (aStats) return -1;
           if (bStats) return 1;
           return a.index - b.index;
         })
         .map(item => item.target);
+    }
+
+    function oneClickDownloadTargets() {
+      return sortedTargetsForRender().filter(target => {
+        const targetState = state.targetStates.get(target.key);
+        return targetState?.stats && targetState.status === "ready" && targetState?.status !== "failed";
+      });
+    }
+
+    function syncTopActionButtons() {
+      const canRunOneClick = state.isOneClickDownloading || oneClickDownloadTargets().length > 0;
+      els.oneClickDownloadBtn.textContent = state.isOneClickDownloading ? "停止测速" : "一键测速";
+      els.oneClickDownloadBtn.disabled = !canRunOneClick || (state.isDownloading && !state.isOneClickDownloading);
+      els.refreshLatencyBtn.disabled = state.isDownloading || state.isOneClickDownloading;
     }
 
     function resetDownloadUi(targetKey) {
@@ -1459,8 +1586,10 @@
 
     function updateClientInfo() {
       els.clientIp.textContent = state.currentClientIp || "待检测";
-      els.clientLocation.textContent = "API 待接入";
-      els.clientIsp.textContent = "API 待接入";
+      els.clientLocation.textContent = [state.currentIpInfo.country, state.currentIpInfo.region, state.currentIpInfo.city]
+        .filter(Boolean)
+        .join(" ") || "未知";
+      els.clientIsp.textContent = state.currentIpInfo.isp || "未知";
     }
 
     function parseTrace(text) {
@@ -1476,11 +1605,19 @@
     function summarizeLatency(samples) {
       const sorted = [...samples].sort((a, b) => a - b);
       return {
-        median_ms: sorted[Math.floor(sorted.length / 2)],
-        min_ms: sorted[0],
-        max_ms: sorted[sorted.length - 1],
+        latency_ms: sorted[Math.floor(sorted.length / 2)],
+        jitter_ms: calculateJitter(samples),
         samples_ms: samples.map(roundMetric),
       };
+    }
+
+    function calculateJitter(samples) {
+      if (samples.length < 2) return 0;
+      let totalDelta = 0;
+      for (let index = 1; index < samples.length; index += 1) {
+        totalDelta += Math.abs(samples[index] - samples[index - 1]);
+      }
+      return roundMetric(totalDelta / (samples.length - 1));
     }
 
     function stableSpeed(samples) {
@@ -1489,8 +1626,8 @@
       return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.75))];
     }
 
-    function progressRatio(elapsed, bytes, contentLength) {
-      const timeRatio = elapsed / state.test.download_test_ms;
+    function progressRatio(elapsed, bytes, contentLength, downloadTestMs = state.test.download_test_ms) {
+      const timeRatio = elapsed / downloadTestMs;
       const byteRatio = contentLength > 0 ? bytes / contentLength : 0;
       return Math.max(timeRatio, byteRatio);
     }
@@ -1521,28 +1658,6 @@
       return typeof value === "number" ? `${value.toFixed(0)} ms` : "-";
     }
 
-    function renderHistoryStatus(status) {
-      return `<span class="history-status-pill ${historyStatusClass(status)}">${formatStatus(status)}</span>`;
-    }
-
-    function historyStatusClass(status) {
-      const map = {
-        running: "running",
-        completed: "completed",
-        failed: "failed",
-      };
-      return map[status] || "running";
-    }
-
-    function formatStatus(status) {
-      const map = {
-        running: "测速中",
-        completed: "已完成",
-        failed: "失败",
-      };
-      return map[status] || status;
-    }
-
     function formatTime(value) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "-";
@@ -1561,6 +1676,10 @@
 
     function sleep(ms) {
       return new Promise(resolve => window.setTimeout(resolve, ms));
+    }
+
+    function cleanText(value) {
+      return String(value || "").trim();
     }
 
     function escapeHtml(value) {

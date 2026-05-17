@@ -5,12 +5,8 @@ use std::{
 
 use chrono::Utc;
 use rusqlite::{Connection, ToSql, params, params_from_iter};
-use uuid::Uuid;
 
-use crate::{
-    ip::mask_ip_for_public,
-    models::{LatencyStats, PublicSpeedRecord, ResultStatus, SaveResultResponse},
-};
+use crate::{ip::mask_ip_for_public, models::PublicSpeedRecord};
 
 #[derive(Clone)]
 pub struct SpeedStore {
@@ -21,10 +17,6 @@ pub struct SpeedStore {
 pub enum StoreError {
     #[error("数据库错误: {0}")]
     Database(#[from] rusqlite::Error),
-    #[error("JSON 序列化失败: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("更新记录缺少更新令牌")]
-    MissingUpdateToken,
     #[error("更新令牌无效")]
     InvalidUpdateToken,
     #[error("数据库连接锁已损坏")]
@@ -34,27 +26,23 @@ pub enum StoreError {
 #[derive(Debug, Clone)]
 pub struct SaveResultInput {
     pub id: Option<i64>,
-    pub update_token: Option<String>,
-    pub domain_key: String,
-    pub domain_host: String,
-    pub trace_url: String,
-    pub download_url: String,
-    pub https_latency: LatencyStats,
-    pub partial_download_mbps: Option<f64>,
-    pub final_download_mbps: Option<f64>,
-    pub status: ResultStatus,
-    pub client_ip: String,
-    pub location: Option<String>,
-    pub isp: Option<String>,
+    pub domain: String,
+    pub https_latency_ms: f64,
+    pub https_jitter_ms: f64,
+    pub download_mbps: f64,
+    pub client_ip: Option<String>,
+    pub ip_country: Option<String>,
+    pub ip_region: Option<String>,
+    pub ip_city: Option<String>,
+    pub ip_isp: Option<String>,
     pub colo: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct QueryFilter {
     pub domain: Option<String>,
-    pub status: Option<ResultStatus>,
     pub q: Option<String>,
-    pub limit: Option<usize>,
+    pub limit: usize,
 }
 
 impl SpeedStore {
@@ -81,164 +69,114 @@ impl SpeedStore {
             r#"
             CREATE TABLE IF NOT EXISTS speed_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                update_token TEXT NOT NULL,
-                domain_key TEXT NOT NULL,
-                domain_host TEXT NOT NULL,
-                trace_url TEXT NOT NULL,
-                download_url TEXT NOT NULL,
-                https_latency_median_ms REAL,
-                https_latency_min_ms REAL,
-                https_latency_max_ms REAL,
-                https_latency_samples_json TEXT,
-                partial_download_mbps REAL,
-                final_download_mbps REAL,
-                status TEXT NOT NULL,
-                client_ip TEXT NOT NULL,
-                location TEXT,
-                isp TEXT,
+                domain TEXT NOT NULL,
+                https_latency_ms REAL,
+                https_jitter_ms REAL,
+                download_mbps REAL,
+                client_ip TEXT,
+                ip_country TEXT,
+                ip_region TEXT,
+                ip_city TEXT,
+                ip_isp TEXT,
                 colo TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                created_at TEXT NOT NULL
             );
+            "#,
+        )?;
+        conn.execute_batch(
+            r#"
 
             CREATE INDEX IF NOT EXISTS idx_speed_results_created_at
                 ON speed_results(created_at);
             CREATE INDEX IF NOT EXISTS idx_speed_results_domain
-                ON speed_results(domain_key);
+                ON speed_results(domain);
             "#,
         )?;
         Ok(())
     }
 
-    pub fn save_result(&self, input: SaveResultInput) -> Result<SaveResultResponse, StoreError> {
+    pub fn save_result(&self, input: SaveResultInput) -> Result<i64, StoreError> {
         match input.id {
-            Some(id) => {
-                let token = input
-                    .update_token
-                    .clone()
-                    .ok_or(StoreError::MissingUpdateToken)?;
-                self.update_result(id, &token, input)?;
-                Ok(SaveResultResponse {
-                    id,
-                    update_token: token,
-                })
-            }
+            Some(id) => self.update_result(id, input),
             None => self.insert_result(input),
         }
     }
 
-    fn insert_result(&self, input: SaveResultInput) -> Result<SaveResultResponse, StoreError> {
-        let token = Uuid::new_v4().to_string();
+    fn insert_result(&self, input: SaveResultInput) -> Result<i64, StoreError> {
         let now = Utc::now().to_rfc3339();
-        let samples_json = serde_json::to_string(&input.https_latency.samples_ms)?;
         let conn = self.conn.lock().map_err(|_| StoreError::LockPoisoned)?;
 
-        // update_token 只返回给本次测速页面，用来约束后续完成态更新。
         conn.execute(
             r#"
             INSERT INTO speed_results (
-                update_token, domain_key, domain_host, trace_url, download_url,
-                https_latency_median_ms, https_latency_min_ms, https_latency_max_ms,
-                https_latency_samples_json, partial_download_mbps, final_download_mbps,
-                status, client_ip, location, isp, colo, created_at, updated_at
+                domain, https_latency_ms, https_jitter_ms, download_mbps,
+                client_ip, ip_country, ip_region, ip_city, ip_isp, colo, created_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             "#,
             params![
-                token,
-                input.domain_key,
-                input.domain_host,
-                input.trace_url,
-                input.download_url,
-                input.https_latency.median_ms,
-                input.https_latency.min_ms,
-                input.https_latency.max_ms,
-                samples_json,
-                input.partial_download_mbps,
-                input.final_download_mbps,
-                input.status.as_str(),
+                input.domain,
+                input.https_latency_ms,
+                input.https_jitter_ms,
+                input.download_mbps,
                 input.client_ip,
-                input.location,
-                input.isp,
+                input.ip_country,
+                input.ip_region,
+                input.ip_city,
+                input.ip_isp,
                 input.colo,
-                now,
                 now,
             ],
         )?;
 
-        Ok(SaveResultResponse {
-            id: conn.last_insert_rowid(),
-            update_token: token,
-        })
+        Ok(conn.last_insert_rowid())
     }
 
-    fn update_result(
-        &self,
-        id: i64,
-        token: &str,
-        input: SaveResultInput,
-    ) -> Result<(), StoreError> {
-        let now = Utc::now().to_rfc3339();
-        let samples_json = serde_json::to_string(&input.https_latency.samples_ms)?;
+    fn update_result(&self, id: i64, input: SaveResultInput) -> Result<i64, StoreError> {
         let conn = self.conn.lock().map_err(|_| StoreError::LockPoisoned)?;
         let rows = conn.execute(
             r#"
             UPDATE speed_results
             SET
-                domain_key = ?3,
-                domain_host = ?4,
-                trace_url = ?5,
-                download_url = ?6,
-                https_latency_median_ms = ?7,
-                https_latency_min_ms = ?8,
-                https_latency_max_ms = ?9,
-                https_latency_samples_json = ?10,
-                partial_download_mbps = COALESCE(?11, partial_download_mbps),
-                final_download_mbps = COALESCE(?12, final_download_mbps),
-                status = ?13,
-                client_ip = ?14,
-                location = COALESCE(?15, location),
-                isp = COALESCE(?16, isp),
-                colo = COALESCE(?17, colo),
-                updated_at = ?18
-            WHERE id = ?1 AND update_token = ?2
+                domain = ?2,
+                https_latency_ms = ?3,
+                https_jitter_ms = ?4,
+                download_mbps = ?5,
+                client_ip = COALESCE(?6, client_ip),
+                ip_country = COALESCE(?7, ip_country),
+                ip_region = COALESCE(?8, ip_region),
+                ip_city = COALESCE(?9, ip_city),
+                ip_isp = COALESCE(?10, ip_isp),
+                colo = COALESCE(?11, colo)
+            WHERE id = ?1
             "#,
             params![
                 id,
-                token,
-                input.domain_key,
-                input.domain_host,
-                input.trace_url,
-                input.download_url,
-                input.https_latency.median_ms,
-                input.https_latency.min_ms,
-                input.https_latency.max_ms,
-                samples_json,
-                input.partial_download_mbps,
-                input.final_download_mbps,
-                input.status.as_str(),
+                input.domain,
+                input.https_latency_ms,
+                input.https_jitter_ms,
+                input.download_mbps,
                 input.client_ip,
-                input.location,
-                input.isp,
+                input.ip_country,
+                input.ip_region,
+                input.ip_city,
+                input.ip_isp,
                 input.colo,
-                now,
             ],
         )?;
 
         if rows == 0 {
             return Err(StoreError::InvalidUpdateToken);
         }
-        Ok(())
+        Ok(id)
     }
 
     pub fn query_results(&self, filter: QueryFilter) -> Result<Vec<PublicSpeedRecord>, StoreError> {
         let mut sql = String::from(
             r#"
             SELECT
-                id, domain_key, domain_host,
-                https_latency_median_ms, https_latency_min_ms, https_latency_max_ms,
-                partial_download_mbps, final_download_mbps, status, client_ip,
-                location, isp, colo, created_at, updated_at
+                id, domain, https_latency_ms, https_jitter_ms, download_mbps,
+                client_ip, ip_country, ip_region, ip_city, ip_isp, colo, created_at
             FROM speed_results
             "#,
         );
@@ -246,24 +184,20 @@ impl SpeedStore {
         let mut values: Vec<Box<dyn ToSql>> = Vec::new();
 
         if let Some(domain) = filter.domain {
-            clauses.push("domain_key = ?".to_string());
+            clauses.push("domain = ?".to_string());
             values.push(Box::new(domain));
         }
 
-        if let Some(status) = filter.status {
-            clauses.push("status = ?".to_string());
-            values.push(Box::new(status.as_str().to_string()));
-        }
-
         if let Some(q) = filter.q.filter(|q| !q.trim().is_empty()) {
-            let pattern = format!("%{}%", q.trim());
-            clauses.push(
-                "(domain_host LIKE ? OR location LIKE ? OR isp LIKE ? OR colo LIKE ?)".to_string(),
-            );
-            values.push(Box::new(pattern.clone()));
-            values.push(Box::new(pattern.clone()));
-            values.push(Box::new(pattern.clone()));
-            values.push(Box::new(pattern));
+            for keyword in q.split_whitespace() {
+                let pattern = format!("%{}%", keyword.trim());
+                clauses.push(
+                    "(domain LIKE ? OR client_ip LIKE ? OR ip_country LIKE ? OR ip_region LIKE ? OR ip_city LIKE ? OR ip_isp LIKE ? OR colo LIKE ?)".to_string(),
+                );
+                for _ in 0..7 {
+                    values.push(Box::new(pattern.clone()));
+                }
+            }
         }
 
         if !clauses.is_empty() {
@@ -272,32 +206,30 @@ impl SpeedStore {
         }
 
         sql.push_str(" ORDER BY datetime(created_at) DESC, id DESC LIMIT ?");
-        let limit = filter.limit.unwrap_or(50).clamp(1, 200) as i64;
-        values.push(Box::new(limit));
+        values.push(Box::new(filter.limit.max(1) as i64));
 
         let conn = self.conn.lock().map_err(|_| StoreError::LockPoisoned)?;
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(
             params_from_iter(values.iter().map(|value| value.as_ref())),
             |row| {
-                let status: String = row.get(8)?;
-                let client_ip: String = row.get(9)?;
+                let client_ip: Option<String> = row.get(5)?;
                 Ok(PublicSpeedRecord {
                     id: row.get(0)?,
-                    domain_key: row.get(1)?,
-                    domain_host: row.get(2)?,
-                    https_latency_median_ms: row.get(3)?,
-                    https_latency_min_ms: row.get(4)?,
-                    https_latency_max_ms: row.get(5)?,
-                    partial_download_mbps: row.get(6)?,
-                    final_download_mbps: row.get(7)?,
-                    status: ResultStatus::from_db(&status),
-                    client_ip: mask_ip_for_public(&client_ip).unwrap_or_else(|| "未知".to_string()),
-                    location: row.get(10)?,
-                    isp: row.get(11)?,
-                    colo: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
+                    domain: row.get(1)?,
+                    https_latency_ms: row.get(2)?,
+                    https_jitter_ms: row.get(3)?,
+                    download_mbps: row.get(4)?,
+                    client_ip: client_ip
+                        .as_deref()
+                        .and_then(mask_ip_for_public)
+                        .unwrap_or_else(|| "未知".to_string()),
+                    ip_country: row.get(6)?,
+                    ip_region: row.get(7)?,
+                    ip_city: row.get(8)?,
+                    ip_isp: row.get(9)?,
+                    colo: row.get(10)?,
+                    created_at: row.get(11)?,
                 })
             },
         )?;
@@ -310,82 +242,123 @@ impl SpeedStore {
 #[cfg(test)]
 mod tests {
     use super::{QueryFilter, SaveResultInput, SpeedStore};
-    use crate::models::{LatencyStats, ResultStatus};
 
-    fn sample_input(status: ResultStatus) -> SaveResultInput {
+    fn sample_input() -> SaveResultInput {
         SaveResultInput {
             id: None,
-            update_token: None,
-            domain_key: "a1".to_string(),
-            domain_host: "a1.example.com".to_string(),
-            trace_url: "https://a1.example.com/cdn-cgi/trace".to_string(),
-            download_url: "https://a1.example.com/200mb.test".to_string(),
-            https_latency: LatencyStats {
-                median_ms: 42.0,
-                min_ms: 38.0,
-                max_ms: 51.0,
-                samples_ms: vec![38.0, 42.0, 51.0],
-            },
-            partial_download_mbps: Some(80.0),
-            final_download_mbps: None,
-            status,
-            client_ip: "1.2.3.4".to_string(),
-            location: None,
-            isp: None,
+            domain: "a1.example.com".to_string(),
+            https_latency_ms: 42.0,
+            https_jitter_ms: 6.5,
+            download_mbps: 80.0,
+            client_ip: Some("1.2.3.4".to_string()),
+            ip_country: Some("德国".to_string()),
+            ip_region: Some("黑森州".to_string()),
+            ip_city: Some("法兰克福".to_string()),
+            ip_isp: Some("xtom.com".to_string()),
             colo: Some("SJC".to_string()),
         }
     }
 
+    fn table_columns(store: &SpeedStore) -> Vec<String> {
+        let conn = store.conn.lock().expect("lock should be available");
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(speed_results)")
+            .expect("schema should be readable");
+        stmt.query_map([], |row| row.get::<_, String>(1))
+            .expect("columns should query")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("columns should collect")
+    }
+
     #[test]
-    fn store_should_insert_running_record_and_query_masked_ip() {
+    fn store_should_create_simplified_schema() {
         let store = SpeedStore::in_memory().expect("store should initialize");
-        let saved = store
-            .save_result(sample_input(ResultStatus::Running))
-            .expect("save should work");
+
+        let columns = table_columns(&store);
+
+        assert!(columns.iter().any(|column| column == "domain"));
+        assert!(columns.iter().any(|column| column == "https_latency_ms"));
+        assert!(columns.iter().any(|column| column == "https_jitter_ms"));
+        assert!(columns.iter().any(|column| column == "download_mbps"));
+        assert!(!columns.iter().any(|column| column == "update_token"));
+        assert!(!columns.iter().any(|column| column == "domain_key"));
+        assert!(!columns.iter().any(|column| column == "domain_host"));
+        assert!(
+            !columns
+                .iter()
+                .any(|column| column == "partial_download_mbps")
+        );
+        assert!(!columns.iter().any(|column| column == "final_download_mbps"));
+        assert!(!columns.iter().any(|column| column == "updated_at"));
+    }
+
+    #[test]
+    fn store_should_insert_record_and_query_simplified_public_record() {
+        let store = SpeedStore::in_memory().expect("store should initialize");
+        let saved = store.save_result(sample_input()).expect("save should work");
 
         let records = store
             .query_results(QueryFilter::default())
             .expect("query should work");
 
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].id, saved.id);
+        assert_eq!(records[0].id, saved);
+        assert_eq!(records[0].domain, "a1.example.com");
+        assert_eq!(records[0].https_latency_ms, Some(42.0));
+        assert_eq!(records[0].https_jitter_ms, Some(6.5));
+        assert_eq!(records[0].download_mbps, Some(80.0));
         assert_eq!(records[0].client_ip, "1.2.3.*");
+        assert_eq!(records[0].ip_country.as_deref(), Some("德国"));
+        assert_eq!(records[0].ip_isp.as_deref(), Some("xtom.com"));
     }
 
     #[test]
-    fn store_should_update_existing_record_with_token() {
+    fn store_should_update_existing_record_without_database_token() {
         let store = SpeedStore::in_memory().expect("store should initialize");
-        let saved = store
-            .save_result(sample_input(ResultStatus::Running))
-            .expect("save should work");
-        let mut update = sample_input(ResultStatus::Completed);
-        update.id = Some(saved.id);
-        update.update_token = Some(saved.update_token);
-        update.final_download_mbps = Some(120.0);
+        let saved = store.save_result(sample_input()).expect("save should work");
+        let mut update = sample_input();
+        update.id = Some(saved);
+        update.download_mbps = 120.0;
 
         store.save_result(update).expect("update should work");
         let records = store
             .query_results(QueryFilter::default())
             .expect("query should work");
 
-        assert_eq!(records[0].status, ResultStatus::Completed);
-        assert_eq!(records[0].final_download_mbps, Some(120.0));
+        assert_eq!(records[0].download_mbps, Some(120.0));
     }
 
     #[test]
-    fn store_should_reject_update_when_token_is_wrong() {
+    fn store_should_query_multiple_keywords_across_ip_location_and_isp() {
         let store = SpeedStore::in_memory().expect("store should initialize");
-        let saved = store
-            .save_result(sample_input(ResultStatus::Running))
-            .expect("save should work");
-        let mut update = sample_input(ResultStatus::Completed);
-        update.id = Some(saved.id);
-        update.update_token = Some("wrong-token".to_string());
+        store.save_result(sample_input()).expect("save should work");
 
-        let err = store
-            .save_result(update)
-            .expect_err("wrong token should fail");
+        let records = store
+            .query_results(QueryFilter {
+                q: Some("德国 xtom".to_string()),
+                limit: 80,
+                ..QueryFilter::default()
+            })
+            .expect("query should work");
 
-        assert!(err.to_string().contains("更新令牌无效"));
+        assert_eq!(records.len(), 1);
+    }
+
+    #[test]
+    fn store_should_apply_resolved_query_limit() {
+        let store = SpeedStore::in_memory().expect("store should initialize");
+        store.save_result(sample_input()).expect("save should work");
+        let mut second = sample_input();
+        second.domain = "a2.example.com".to_string();
+        store.save_result(second).expect("save should work");
+
+        let records = store
+            .query_results(QueryFilter {
+                limit: 1,
+                ..QueryFilter::default()
+            })
+            .expect("query should work");
+
+        assert_eq!(records.len(), 1);
     }
 }

@@ -13,4 +13,3 @@ serde_yaml = "0.9"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 toml = "0.9"
-uuid = { version = "1", features = ["v4"] }

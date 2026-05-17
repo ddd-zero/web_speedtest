@@ -1,10 +1,14 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TestTarget {
     pub key: String,
     pub label: String,
     pub host: String,
+    pub cname: String,
     pub trace_url: String,
     pub download_url: String,
 }
@@ -14,6 +18,7 @@ pub struct RuntimeConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub test: TestSettings,
+    pub history: HistorySettings,
     pub targets: Vec<TestTarget>,
 }
 
@@ -36,6 +41,12 @@ pub struct TestSettings {
     pub progress_save_ratio: f64,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct HistorySettings {
+    pub default_limit: usize,
+    pub max_limit: usize,
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 struct FileConfig {
     #[serde(default)]
@@ -45,20 +56,25 @@ struct FileConfig {
     #[serde(default)]
     test: TestSettings,
     #[serde(default)]
+    history: HistorySettings,
+    #[serde(default)]
     domains: DomainConfig,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct DomainConfig {
-    external_yaml_path: Option<PathBuf>,
+    path: Option<PathBuf>,
     #[serde(default)]
-    items: Vec<DomainItem>,
+    overrides: Vec<DomainItem>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct DomainItem {
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
     pub url: String,
+    #[serde(default)]
+    pub cname: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -73,6 +89,10 @@ pub enum ConfigError {
     Io(#[from] std::io::Error),
     #[error("配置文件不存在: {}", .0.display())]
     MissingConfig(PathBuf),
+    #[error("domains.path 未配置，无法读取外部线路文件")]
+    MissingDomainPath,
+    #[error("外部线路文件不存在: {}", .0.display())]
+    MissingDomainFile(PathBuf),
     #[error("TOML 配置解析失败: {0}")]
     Toml(#[from] toml::de::Error),
     #[error("YAML 线路配置解析失败: {0}")]
@@ -81,6 +101,10 @@ pub enum ConfigError {
     NoDomains,
     #[error("线路 URL 无效: {0}")]
     InvalidDomainUrl(String),
+    #[error("重复线路域名: {0}")]
+    DuplicateDomain(String),
+    #[error("历史记录默认查询数量不能大于最大查询数量")]
+    InvalidHistoryLimit,
 }
 
 impl RuntimeConfig {
@@ -108,6 +132,7 @@ impl RuntimeConfig {
             server: file_config.server,
             database: file_config.database,
             test: file_config.test.normalized(),
+            history: file_config.history.normalized()?,
             targets,
         })
     }
@@ -155,22 +180,76 @@ impl TestSettings {
     }
 }
 
+impl Default for HistorySettings {
+    fn default() -> Self {
+        Self {
+            default_limit: 80,
+            max_limit: 200,
+        }
+    }
+}
+
+impl HistorySettings {
+    fn normalized(mut self) -> Result<Self, ConfigError> {
+        self.default_limit = self.default_limit.clamp(1, 1000);
+        self.max_limit = self.max_limit.clamp(1, 1000);
+        if self.default_limit > self.max_limit {
+            return Err(ConfigError::InvalidHistoryLimit);
+        }
+        Ok(self)
+    }
+
+    pub fn resolve_limit(&self, requested: Option<usize>) -> usize {
+        requested
+            .unwrap_or(self.default_limit)
+            .clamp(1, self.max_limit)
+    }
+}
+
 fn load_domain_items(config: &DomainConfig) -> Result<Vec<DomainItem>, ConfigError> {
-    if let Some(path) = &config.external_yaml_path
-        && path.is_file()
-    {
-        let external =
-            serde_yaml::from_str::<ExternalDomainsFile>(&std::fs::read_to_string(path)?)?;
-        if !external.domains.is_empty() {
-            return Ok(external.domains);
+    let path = config.path.as_ref().ok_or(ConfigError::MissingDomainPath)?;
+    if !path.is_file() {
+        return Err(ConfigError::MissingDomainFile(path.clone()));
+    }
+
+    let external = serde_yaml::from_str::<ExternalDomainsFile>(&std::fs::read_to_string(path)?)?;
+    if external.domains.is_empty() {
+        return Err(ConfigError::NoDomains);
+    }
+
+    merge_domain_overrides(external.domains, &config.overrides)
+}
+
+fn merge_domain_overrides(
+    mut domains: Vec<DomainItem>,
+    overrides: &[DomainItem],
+) -> Result<Vec<DomainItem>, ConfigError> {
+    let mut index_by_url = HashMap::new();
+    for (index, domain) in domains.iter().enumerate() {
+        index_by_url.insert(normalize_base_url(&domain.url)?, index);
+    }
+
+    for override_item in overrides {
+        let base_url = normalize_base_url(&override_item.url)?;
+        if let Some(index) = index_by_url.get(&base_url).copied() {
+            if let Some(name) = non_empty_string(override_item.name.as_deref()) {
+                domains[index].name = Some(name.to_string());
+            }
+            if let Some(cname) = non_empty_string(override_item.cname.as_deref()) {
+                domains[index].cname = Some(cname.to_string());
+            }
+        } else {
+            index_by_url.insert(base_url, domains.len());
+            domains.push(override_item.clone());
         }
     }
 
-    Ok(config.items.clone())
+    Ok(domains)
 }
 
 fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
     let mut used_keys = HashSet::new();
+    let mut used_hosts = HashSet::new();
     items
         .iter()
         .map(|item| {
@@ -180,21 +259,50 @@ fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
                 .or_else(|| base_url.strip_prefix("http://"))
                 .unwrap_or(&base_url)
                 .to_string();
+            let host_key = host.to_ascii_lowercase();
+            if !used_hosts.insert(host_key.clone()) {
+                return Err(ConfigError::DuplicateDomain(host_key));
+            }
             let mut key = slugify(&host);
             if key.is_empty() {
-                key = slugify(&item.name);
+                key = slugify(display_label(item.name.as_deref(), &host).as_str());
             }
             let unique_key = unique_key(key, &mut used_keys);
 
             Ok(TestTarget {
                 key: unique_key,
-                label: item.name.clone(),
+                label: display_label(item.name.as_deref(), &host),
                 host,
+                cname: display_cname(item.cname.as_deref()),
                 trace_url: format!("{base_url}/cdn-cgi/trace"),
                 download_url: format!("{base_url}/200mb.test"),
             })
         })
         .collect()
+}
+
+fn display_label(name: Option<&str>, host: &str) -> String {
+    non_empty_string(name).unwrap_or(host).to_string()
+}
+
+fn display_cname(cname: Option<&str>) -> String {
+    let Some(cname) = non_empty_string(cname) else {
+        return "-".to_string();
+    };
+    let without_scheme = cname
+        .strip_prefix("https://")
+        .or_else(|| cname.strip_prefix("http://"))
+        .unwrap_or(cname);
+    let trimmed = without_scheme.trim_end_matches('/').trim();
+    if trimmed.is_empty() {
+        "-".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn non_empty_string(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
 }
 
 fn normalize_base_url(input: &str) -> Result<String, ConfigError> {
@@ -241,8 +349,76 @@ mod tests {
     use super::{ConfigError, RuntimeConfig};
 
     #[test]
+    fn runtime_config_should_require_external_domain_file_path() {
+        let result = RuntimeConfig::from_toml_str(
+            r#"
+            [server]
+            host = "127.0.0.1"
+            port = 3000
+            "#,
+        );
+
+        assert!(matches!(result, Err(ConfigError::MissingDomainPath)));
+    }
+
+    #[test]
+    fn runtime_config_should_reject_missing_external_domain_file() {
+        let missing_path = std::env::temp_dir().join(format!(
+            "web-speed-missing-domains-{}.yaml",
+            std::process::id()
+        ));
+        let toml = format!(
+            r#"
+            [domains]
+            path = '{}'
+            "#,
+            missing_path.display()
+        );
+
+        let result = RuntimeConfig::from_toml_str(&toml);
+
+        assert!(
+            matches!(result, Err(ConfigError::MissingDomainFile(path)) if path == missing_path)
+        );
+    }
+
+    #[test]
+    fn runtime_config_should_reject_empty_external_domain_file() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speed-empty-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
+        let toml = format!(
+            r#"
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        );
+
+        let result = RuntimeConfig::from_toml_str(&toml);
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert!(matches!(result, Err(ConfigError::NoDomains)));
+    }
+
+    #[test]
     fn runtime_config_should_read_server_and_test_options_from_toml() {
-        let config = RuntimeConfig::from_toml_str(
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speed-options-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+        let config = RuntimeConfig::from_toml_str(&format!(
             r#"
             [server]
             host = "0.0.0.0"
@@ -254,12 +430,13 @@ mod tests {
             download_test_ms = 12000
             progress_save_ratio = 0.35
 
-            [[domains.items]]
-            name = "a1 线路"
-            url = "https://a1.example.com"
+            [domains]
+            path = '{}'
             "#,
-        )
+            yaml_path.display()
+        ))
         .expect("config should parse");
+        let _ = std::fs::remove_file(&yaml_path);
 
         assert_eq!(config.listen_addr(), "0.0.0.0:52143");
         assert_eq!(config.test.latency_rounds, 7);
@@ -268,7 +445,73 @@ mod tests {
     }
 
     #[test]
-    fn runtime_config_should_read_domains_from_external_yaml() {
+    fn runtime_config_should_read_history_limits_from_toml() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speed-history-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let config = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [history]
+            default_limit = 40
+            max_limit = 90
+
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ))
+        .expect("config should parse");
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert_eq!(config.history.default_limit, 40);
+        assert_eq!(config.history.max_limit, 90);
+    }
+
+    #[test]
+    fn runtime_config_should_reject_invalid_history_limits() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speed-invalid-history-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let result = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [history]
+            default_limit = 201
+            max_limit = 200
+
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ));
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert!(matches!(result, Err(ConfigError::InvalidHistoryLimit)));
+    }
+
+    #[test]
+    fn runtime_config_should_read_domains_from_yaml_and_apply_overrides() {
         let yaml_path =
             std::env::temp_dir().join(format!("web-speed-domains-{}.yaml", std::process::id()));
         std::fs::write(
@@ -290,11 +533,20 @@ mod tests {
         let toml = format!(
             r#"
             [domains]
-            external_yaml_path = '{}'
+            path = '{}'
 
-            [[domains.items]]
-            name = "fallback"
-            url = "https://fallback.example.com"
+            [[domains.overrides]]
+            url = "https://line-a.example.com/"
+            cname = "line-a.cname.example.com"
+
+            [[domains.overrides]]
+            name = "覆盖后的 a1"
+            url = "https://line-b.example.com"
+
+            [[domains.overrides]]
+            name = "新增线路"
+            url = "https://new.example.com/"
+            cname = "new.cname.example.com"
             "#,
             yaml_path.display()
         );
@@ -302,15 +554,53 @@ mod tests {
         let config = RuntimeConfig::from_toml_str(&toml).expect("config should parse");
         let _ = std::fs::remove_file(&yaml_path);
 
-        assert_eq!(config.targets.len(), 2);
+        assert_eq!(config.targets.len(), 3);
         assert_eq!(config.targets[0].label, "19931110 线路");
+        assert_eq!(config.targets[0].cname, "line-a.cname.example.com");
         assert_eq!(
             config.targets[0].trace_url,
             "https://line-a.example.com/cdn-cgi/trace"
         );
+        assert_eq!(config.targets[1].label, "覆盖后的 a1");
+        assert_eq!(config.targets[1].cname, "-");
         assert_eq!(
             config.targets[1].download_url,
             "https://line-b.example.com/200mb.test"
+        );
+        assert_eq!(config.targets[2].label, "新增线路");
+        assert_eq!(config.targets[2].host, "new.example.com");
+        assert_eq!(config.targets[2].cname, "new.cname.example.com");
+    }
+
+    #[test]
+    fn runtime_config_should_reject_duplicate_domain_hosts() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speed-duplicate-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1"
+                url: "https://dup.example.com"
+              - name: "a2"
+                url: "https://dup.example.com/"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let result = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ));
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert!(
+            matches!(result, Err(ConfigError::DuplicateDomain(domain)) if domain == "dup.example.com")
         );
     }
 
@@ -327,13 +617,21 @@ mod tests {
 
     #[test]
     fn runtime_config_should_reject_empty_domain_sources() {
-        let result = RuntimeConfig::from_toml_str(
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speed-empty-config-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
+        let toml = format!(
             r#"
-            [server]
-            host = "127.0.0.1"
-            port = 3000
+            [domains]
+            path = '{}'
             "#,
+            yaml_path.display()
         );
+
+        let result = RuntimeConfig::from_toml_str(&toml);
+        let _ = std::fs::remove_file(&yaml_path);
 
         assert!(matches!(result, Err(ConfigError::NoDomains)));
     }
