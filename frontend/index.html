@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -258,7 +259,7 @@
       background: #fffdf9;
     }
 
-    .target-row > :not(.target-row-progress) {
+    .target-row> :not(.target-row-progress) {
       position: relative;
       z-index: 1;
     }
@@ -409,8 +410,21 @@
       transition: opacity .18s ease;
     }
 
+    .modal-overlay.closing {
+      opacity: 0;
+      visibility: visible;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+
     .modal-overlay.active .modal-content {
+      opacity: 1;
+      transform: scale(1);
       animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+    }
+
+    .modal-overlay.closing .modal-content {
+      animation: popOut .2s cubic-bezier(.4, 0, .2, 1) both;
     }
 
     .modal-overlay:focus {
@@ -428,8 +442,13 @@
       border: 1px solid rgba(230, 225, 218, .9);
       border-radius: 18px;
       box-shadow: 0 24px 70px rgba(45, 39, 35, .22);
-      transform: scale(0.95);
+      opacity: 0;
+      transform: scale(0.96);
       transform-origin: center;
+      transition:
+        opacity .16s ease,
+        transform .18s cubic-bezier(.22, 1, .36, 1);
+      will-change: transform, opacity;
     }
 
     @keyframes popIn {
@@ -441,6 +460,18 @@
       to {
         opacity: 1;
         transform: scale(1);
+      }
+    }
+
+    @keyframes popOut {
+      from {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      to {
+        opacity: 0;
+        transform: scale(0.96);
       }
     }
 
@@ -687,6 +718,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+
       .modal-overlay,
       .modal-content {
         transition: none;
@@ -694,11 +726,17 @@
 
       .modal-overlay.active .modal-content {
         animation: none;
+        opacity: 1;
         transform: scale(1);
+      }
+
+      .modal-overlay.closing .modal-content {
+        animation: none;
       }
     }
   </style>
 </head>
+
 <body>
   <main class="layout">
     <section class="card main-card">
@@ -735,9 +773,11 @@
     </section>
   </main>
 
-  <button class="history-fab" id="history-btn" type="button" aria-controls="history-modal" aria-expanded="false" aria-label="打开测速记录">测速记录</button>
+  <button class="history-fab" id="history-btn" type="button" aria-controls="history-modal" aria-expanded="false"
+    aria-label="打开测速记录">测速记录</button>
 
-  <div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title" aria-hidden="true" tabindex="-1">
+  <div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title"
+    aria-hidden="true" tabindex="-1">
     <div class="modal-content history-shell">
       <div class="modal-header">
         <div>
@@ -788,6 +828,7 @@
   <script>
     const SMOOTHING = 0.3;
     const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
+    const HISTORY_CLOSE_ANIMATION_MS = 220;
     const COLO_PALETTE = [
       { bg: "#eaf2ff", fg: "#205c9d", ring: "#c8ddfa" },
       { bg: "#e7f6f0", fg: "#1d6f57", ring: "#bfe7d7" },
@@ -803,6 +844,7 @@
       { bg: "#fff1f4", fg: "#93405d", ring: "#efc8d4" },
     ];
     const assignedColoColorIndexes = new Map();
+    let historyCloseTimer = 0;
 
     const state = {
       targets: [],
@@ -870,6 +912,7 @@
         state.targetStates = new Map(state.targets.map(target => [target.key, createTargetState()]));
         renderHistoryDomainOptions();
         renderTargetList();
+        els.latencyStatus.textContent = renderLatencySummary();
       } catch (error) {
         els.targetList.innerHTML = `<div class="empty-row">${escapeHtml(error.message)}</div>`;
         els.latencyStatus.textContent = "配置加载失败";
@@ -903,7 +946,7 @@
         targetState.latencySkipped = false;
       });
       state.currentColos.clear();
-      els.latencyStatus.textContent = `延迟测试 0/${state.test.latency_rounds}`;
+      els.latencyStatus.textContent = renderLatencyProgress(0);
       renderTargetList();
 
       for (let round = 1; round <= state.test.latency_rounds; round += 1) {
@@ -942,7 +985,7 @@
             targetState.stats = summarizeLatency(targetState.samples);
           }
         });
-        els.latencyStatus.textContent = `延迟测试 ${round}/${state.test.latency_rounds}`;
+        els.latencyStatus.textContent = renderLatencyProgress(round);
         renderTargetList();
         if (round < state.test.latency_rounds) await sleep(140);
       }
@@ -950,8 +993,17 @@
       state.targetStates.forEach(targetState => {
         targetState.status = targetState.samples.length ? "ready" : "failed";
       });
-      els.latencyStatus.textContent = "延迟测试完成";
+      els.latencyStatus.textContent = renderLatencySummary();
       renderTargetList();
+    }
+
+    function renderLatencyProgress(round) {
+      return `HTTPS 检测 ${round}/${state.test.latency_rounds} · ${renderLatencySummary()}`;
+    }
+
+    function renderLatencySummary() {
+      const reachableCount = state.targets.filter(target => state.targetStates.get(target.key)?.samples.length).length;
+      return `共 ${state.targets.length} 条线路，测试成功 ${reachableCount} 条`;
     }
 
     async function measureHttpsLatency(target) {
@@ -1059,8 +1111,8 @@
         const message = state.stopRequested
           ? "测速已停止"
           : error instanceof TypeError
-          ? "下载失败：测速文件可能缺少跨域响应头"
-          : error.message;
+            ? "下载失败：测速文件可能缺少跨域响应头"
+            : error.message;
         updateDownloadMessage(targetKey, message);
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
@@ -1444,14 +1496,23 @@
     }
 
     function toggleHistory(show) {
+      window.clearTimeout(historyCloseTimer);
+      historyCloseTimer = 0;
       state.isHistoryOpen = show;
-      els.historyModal.classList.toggle("active", show);
       els.historyModal.setAttribute("aria-hidden", String(!show));
       els.historyBtn.setAttribute("aria-expanded", String(show));
       document.body.classList.toggle("history-open", show);
       if (show) {
+        els.historyModal.classList.remove("closing");
+        els.historyModal.classList.add("active");
         window.requestAnimationFrame(() => els.historyModal.focus({ preventScroll: true }));
       } else {
+        els.historyModal.classList.remove("active");
+        els.historyModal.classList.add("closing");
+        historyCloseTimer = window.setTimeout(() => {
+          els.historyModal.classList.remove("closing");
+          historyCloseTimer = 0;
+        }, HISTORY_CLOSE_ANIMATION_MS);
         els.historyBtn.focus({ preventScroll: true });
       }
     }
@@ -1512,4 +1573,5 @@
     }
   </script>
 </body>
+
 </html>

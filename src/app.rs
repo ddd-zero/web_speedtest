@@ -335,6 +335,32 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_show_latency_reachability_summary() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("function renderLatencySummary()"),
+            "延迟状态应由统一函数渲染，避免完成态和初始化态文案漂移"
+        );
+        assert!(
+            html.contains("reachableCount"),
+            "延迟状态应统计 HTTPS 成功的线路数量"
+        );
+        assert!(
+            html.contains("`共 ${state.targets.length} 条线路，测试成功 ${reachableCount} 条`"),
+            "状态栏应展示总线路数和 HTTPS 可通线路数"
+        );
+        assert!(
+            html.contains("els.latencyStatus.textContent = renderLatencySummary();"),
+            "配置加载和测试结束后都应刷新统计摘要"
+        );
+        assert!(
+            !html.contains("延迟测试完成"),
+            "完成态文案信息量较低，应替换为线路统计摘要"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_use_responsive_history_window() {
         let html = super::embedded_index_html();
 
@@ -356,12 +382,21 @@ mod tests {
         assert!(html.contains("height: 100dvh"));
         assert!(html.contains("        scrollbar-gutter: auto;"));
         assert!(html.contains("        border: none;\n      }\n\n      .history-toolbar"));
+        assert!(html.contains("opacity: 0;\n      transform: scale(0.96);"));
+        assert!(html.contains("transition:\n        opacity .16s ease,\n        transform .18s cubic-bezier(.22, 1, .36, 1);"));
+        assert!(html.contains("will-change: transform, opacity"));
+        assert!(html.contains("opacity: 1;\n      transform: scale(1);\n      animation: popIn"));
+        assert!(html.contains(".modal-overlay.closing"));
+        assert!(html.contains("animation: popOut .2s cubic-bezier(.4, 0, .2, 1) both;"));
         assert!(html.contains("@keyframes popIn"));
+        assert!(html.contains("@keyframes popOut"));
         assert!(html.contains("animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)"));
         assert!(html.contains("transform: scale(0.95)"));
         assert!(html.contains("transform: scale(1)"));
         assert!(html.contains(".modal-overlay:focus"));
         assert!(html.contains("id=\"close-history-btn\""));
+        assert!(html.contains("const HISTORY_CLOSE_ANIMATION_MS = 220"));
+        assert!(html.contains("els.historyModal.classList.add(\"closing\")"));
         assert!(html.contains("els.closeHistoryBtn.addEventListener"));
         assert!(!html.contains("clip-path: circle"));
         assert!(!html.contains("backdrop-filter"));
