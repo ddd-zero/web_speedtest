@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>多域名网络测速</title>
+  <title>网络测速</title>
   <style>
     :root {
       --bg-color: #f5f2eb;
@@ -561,7 +561,7 @@
 
     table {
       width: 100%;
-      min-width: 780px;
+      min-width: 760px;
       border-collapse: collapse;
       table-layout: fixed;
       font-size: .84rem;
@@ -576,7 +576,7 @@
     }
 
     .history-col-speed {
-      width: 112px;
+      width: 100px;
     }
 
     .history-col-domain {
@@ -613,7 +613,11 @@
 
     .history-table th,
     .history-table td {
-      padding: 5px;
+      padding: 10px;
+    }
+
+    .history-table .col-network {
+      padding-left: 13px;
     }
 
     .col-speed {
@@ -809,8 +813,8 @@
     <section class="card main-card">
       <div class="topbar">
         <div>
-          <h1>多域名网络测速</h1>
-          <div class="subline">自动多轮检测 HTTPS 延迟，点击域名单线程下载测速。</div>
+          <h1>网络测速</h1>
+          <div class="subline">自动多轮检测 HTTPS 延迟，点击测试单线程下载测速。</div>
         </div>
         <div class="top-actions">
           <button class="btn-primary" id="one-click-download-btn" type="button" disabled>一键测速</button>
@@ -876,7 +880,7 @@
               <th>域名</th>
               <th class="col-latency">HTTPS</th>
               <th style="text-align:right">下载速度</th>
-              <th>网络环境</th>
+              <th class="col-network">网络环境</th>
             </tr>
           </thead>
           <tbody id="history-body"></tbody>
@@ -1354,7 +1358,7 @@
             </td>
             <td class="col-latency">${renderHistoryLatency(record)}</td>
             <td class="col-speed">${speed.toFixed(1)} Mbps</td>
-            <td>${renderHistoryNetwork(record)}</td>
+            <td class="col-network">${renderHistoryNetwork(record)}</td>
           </tr>`;
         }).join("");
       } catch (error) {

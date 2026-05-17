@@ -567,6 +567,21 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_space_history_network_column_semantically() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("<th class=\"col-network\">网络环境</th>")
+                && html.contains("<td class=\"col-network\">${renderHistoryNetwork(record)}</td>"),
+            "历史记录网络环境列应使用语义化 class 标记，而不是依赖列序号选择器"
+        );
+        assert!(
+            html.contains(".history-table .col-network {\n      padding-left: 16px;\n    }"),
+            "网络环境列应通过专属 class 增加左侧留白，拉开与下载速度列的距离"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_show_history_colo_badge_after_location_and_isp() {
         let html = super::embedded_index_html();
 
