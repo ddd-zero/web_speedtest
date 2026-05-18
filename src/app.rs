@@ -592,6 +592,27 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_suppress_mobile_button_tap_highlight_and_keep_keyboard_focus() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("-webkit-tap-highlight-color: transparent;"),
+            "移动端按钮应禁用系统蓝色触摸高亮，避免点击后出现选中提示"
+        );
+        assert!(
+            html.contains(
+                "button:focus:not(:focus-visible) {\n      outline: none;\n    }"
+            ),
+            "指针点击触发的按钮焦点不应显示默认轮廓"
+        );
+        assert!(
+            html.contains("button:focus-visible")
+                && html.contains("outline: 3px solid rgba(218, 119, 86, .48);"),
+            "键盘导航仍需要保留符合页面主题色的可见焦点"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_use_ten_pixel_padding_in_history_table_cells() {
         let html = super::embedded_index_html();
 

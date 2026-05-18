@@ -2,3 +2,6 @@
 node_modules/
 .superpowers/
 speed_results.sqlite3
+/docs
+/config.toml
+/config.yaml

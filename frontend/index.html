@@ -104,6 +104,9 @@
       font-size: .92rem;
       font-weight: 700;
       cursor: pointer;
+      /* 移动端系统高亮会与自定义按压态叠加，键盘焦点由 :focus-visible 单独处理。 */
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
       transition: transform .2s, background .2s, border-color .2s, color .2s, opacity .2s;
     }
 
@@ -115,6 +118,15 @@
       cursor: not-allowed;
       opacity: .55;
       transform: none;
+    }
+
+    button:focus:not(:focus-visible) {
+      outline: none;
+    }
+
+    button:focus-visible {
+      outline: 3px solid rgba(218, 119, 86, .48);
+      outline-offset: 3px;
     }
 
     .btn-primary {
