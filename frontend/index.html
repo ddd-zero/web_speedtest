@@ -129,13 +129,19 @@
       outline-offset: 3px;
     }
 
+    button.click-feedback:not(:disabled) {
+      animation: buttonClickFeedback .16s ease-out;
+    }
+
     .btn-primary {
       color: #fff;
       background: var(--accent);
       box-shadow: 0 4px 15px rgba(218, 119, 86, .24);
     }
 
-    .btn-primary:hover:not(:disabled) {
+    .btn-primary:hover:not(:disabled),
+    .btn-primary:active:not(:disabled),
+    .btn-primary.click-feedback:not(:disabled) {
       background: var(--accent-hover);
     }
 
@@ -166,7 +172,9 @@
       transform: translateY(-50%);
     }
 
-    .history-fab:hover:not(:disabled) {
+    .history-fab:hover:not(:disabled),
+    .history-fab:active:not(:disabled),
+    .history-fab.click-feedback:not(:disabled) {
       background: var(--accent-hover);
       transform: translateY(-50%) translateX(-3px);
     }
@@ -533,7 +541,9 @@
         box-shadow .16s ease;
     }
 
-    .close-btn:hover:not(:disabled) {
+    .close-btn:hover:not(:disabled),
+    .close-btn:active:not(:disabled),
+    .close-btn.click-feedback:not(:disabled) {
       color: var(--accent);
       background: #fff4ed;
       border-color: rgba(218, 119, 86, .35);
@@ -544,6 +554,20 @@
     .close-btn:active:not(:disabled) {
       box-shadow: 0 4px 10px rgba(218, 119, 86, .16);
       transform: translateY(0) scale(0.94);
+    }
+
+    @keyframes buttonClickFeedback {
+      0% {
+        filter: brightness(.96);
+      }
+
+      45% {
+        filter: brightness(.9);
+      }
+
+      100% {
+        filter: brightness(1);
+      }
     }
 
     .history-toolbar {
@@ -932,6 +956,7 @@
     const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
     const ONE_CLICK_DOWNLOAD_TEST_MS = 6000;
     const HISTORY_CLOSE_ANIMATION_MS = 220;
+    const BUTTON_CLICK_FEEDBACK_MS = 160;
     const COLO_PALETTE = [
       { bg: "#eaf2ff", fg: "#205c9d", ring: "#c8ddfa" },
       { bg: "#e7f6f0", fg: "#1d6f57", ring: "#bfe7d7" },
@@ -946,6 +971,7 @@
       { bg: "#fff1f4", fg: "#93405d", ring: "#efc8d4" },
     ];
     const assignedColoColorIndexes = new Map();
+    const clickFeedbackTimers = new WeakMap();
     let historyCloseTimer = 0;
 
     const state = {
@@ -997,10 +1023,18 @@
 
     window.addEventListener("DOMContentLoaded", init);
 
+    document.addEventListener("click", event => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("button");
+      if (!button) return;
+      playButtonClickFeedback(button);
+    }, true);
+
     els.oneClickDownloadBtn.addEventListener("click", runOneClickDownloadSequence);
     els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
-    els.historyBtn.addEventListener("click", openHistory);
-    els.closeHistoryBtn.addEventListener("click", () => toggleHistory(false));
+    els.historyBtn.addEventListener("click", () => runAfterButtonClickFeedback(openHistory));
+    els.closeHistoryBtn.addEventListener("click", () => runAfterButtonClickFeedback(() => toggleHistory(false)));
     els.historyModal.addEventListener("click", event => {
       if (event.target === els.historyModal) toggleHistory(false);
     });
@@ -1441,7 +1475,7 @@
             <strong class="target-speed-value">${formatNodeSpeed(targetState)}</strong>
             <span class="target-download-status">${escapeHtml(renderDownloadStatusText(targetState))}</span>
           </div>
-          <button class="btn-primary" type="button" onclick="startDownloadTest('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
+          <button class="btn-primary" type="button" onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
         </div>`;
       }).join("");
       els.targetList.innerHTML = header + rows;
@@ -1738,6 +1772,28 @@
       const timeRatio = elapsed / downloadTestMs;
       const byteRatio = contentLength > 0 ? bytes / contentLength : 0;
       return Math.max(timeRatio, byteRatio);
+    }
+
+    function playButtonClickFeedback(button) {
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return;
+      const activeTimer = clickFeedbackTimers.get(button);
+      if (activeTimer) window.clearTimeout(activeTimer);
+      button.classList.remove("click-feedback");
+      void button.offsetWidth;
+      button.classList.add("click-feedback");
+      const timer = window.setTimeout(() => {
+        button.classList.remove("click-feedback");
+        clickFeedbackTimers.delete(button);
+      }, BUTTON_CLICK_FEEDBACK_MS);
+      clickFeedbackTimers.set(button, timer);
+    }
+
+    function runAfterButtonClickFeedback(action) {
+      window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);
+    }
+
+    function startDownloadTestAfterClick(targetKey) {
+      runAfterButtonClickFeedback(() => startDownloadTest(targetKey));
     }
 
     function toggleHistory(show) {

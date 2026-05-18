@@ -613,6 +613,81 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_mirror_hover_feedback_for_touch_active_buttons() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".btn-primary:hover:not(:disabled),")
+                && html.contains(".btn-primary:active:not(:disabled),")
+                && html.contains("background: var(--accent-hover);"),
+            "主按钮在移动端按下时应复用桌面 hover 的变暗反馈"
+        );
+        assert!(
+            html.contains(".history-fab:hover:not(:disabled),")
+                && html.contains(".history-fab:active:not(:disabled),")
+                && html.contains("transform: translateY(-50%) translateX(-3px);"),
+            "测速记录浮动按钮在触摸按下时应复用 hover 的变暗反馈"
+        );
+        assert!(
+            html.contains(".close-btn:hover:not(:disabled),")
+                && html.contains(".close-btn:active:not(:disabled),")
+                && html.contains("color: var(--accent);"),
+            "关闭按钮在触摸按下时应复用 hover 的颜色反馈"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_play_click_feedback_after_touch_release() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("const BUTTON_CLICK_FEEDBACK_MS = 160"),
+            "点击反馈应使用短时常量，避免弹窗切换吞掉点击动画"
+        );
+        assert!(
+            html.contains("button.click-feedback:not(:disabled)")
+                && html.contains("@keyframes buttonClickFeedback"),
+            "按钮点击后应通过独立 click-feedback 动画呈现松手后的反馈"
+        );
+        assert!(
+            html.contains("document.addEventListener(\"click\", event => {")
+                && html.contains("playButtonClickFeedback(button);")
+                && html.contains("}, true);"),
+            "所有按钮点击都应在捕获阶段先播放点击反馈"
+        );
+        assert!(
+            html.contains(
+                "els.historyBtn.addEventListener(\"click\", () => runAfterButtonClickFeedback(openHistory));"
+            ) && html.contains(
+                "els.closeHistoryBtn.addEventListener(\"click\", () => runAfterButtonClickFeedback(() => toggleHistory(false)));"
+            ),
+            "打开和关闭测速记录应等待点击反馈可见后再切换弹窗"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_delay_dynamic_download_button_action_for_click_feedback() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                r#"onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')""#
+            ),
+            "动态渲染的开始测速按钮应先播放点击反馈，再触发测速动作"
+        );
+        assert!(
+            html.contains(
+                "function startDownloadTestAfterClick(targetKey) {\n      runAfterButtonClickFeedback(() => startDownloadTest(targetKey));\n    }"
+            ),
+            "开始测速的延迟包装应复用统一点击反馈时长"
+        );
+        assert!(
+            !html.contains(r#"onclick="startDownloadTest('${escapeHtml(target.key)}')""#),
+            "开始测速按钮不应直接触发会立即重渲染列表的测速动作"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_use_ten_pixel_padding_in_history_table_cells() {
         let html = super::embedded_index_html();
 
