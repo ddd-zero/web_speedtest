@@ -1100,14 +1100,26 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_use_ten_pixel_padding_in_history_table_cells() {
+    fn embedded_index_html_should_keep_history_row_height_and_time_stable() {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains(
-                ".history-table th,\n    .history-table td {\n      padding: 10px;\n    }"
-            ),
-            "测速记录表格的表头、内容和空状态单元格 padding 都应统一为 10px"
+            html.contains(".history-table th,\n    .history-table td {\n      padding: 8px;"),
+            "测速记录表格单元格 padding 应固定，避免行高随视口宽度变化"
+        );
+        assert!(
+            html.contains(".history-table tbody td {\n      min-height: 54px;\n    }"),
+            "历史记录每行应有稳定高度，避免收窄时视觉抖动"
+        );
+        assert!(
+            html.contains("<th class=\"col-time\">时间</th>")
+                && html.contains("<td class=\"col-time\">${formatTime(record.created_at)}</td>")
+                && html.contains(".col-time {\n      font-family: var(--mono-stack);\n      white-space: nowrap;\n    }"),
+            "历史记录时间列应有语义 class 并禁止换行"
+        );
+        assert!(
+            !html.contains("padding: clamp(8px, 1.1vw, 10px);"),
+            "历史记录不应再用随宽度变化的 padding 影响行高"
         );
     }
 
@@ -1121,8 +1133,18 @@ mod tests {
             "历史记录访问来源列应使用贴近内容的表头，并通过语义化 class 标记"
         );
         assert!(
-            html.contains(".history-table .col-network {\n      padding-left: 13px;\n    }"),
-            "访问来源列应通过专属 class 增加左侧留白，拉开与下载速度列的距离"
+            html.contains("<th class=\"col-domain\">域名</th>")
+                && html.contains("<td class=\"col-domain\">")
+                && html.contains(".history-table .col-domain,\n    .history-table .col-network {\n      padding-left: clamp(8px, 1.55vw, 14px);\n    }"),
+            "历史记录域名列和访问来源列应通过连续留白拉开相邻列，避免断点处跳变"
+        );
+        assert!(
+            !html.contains("@media (min-width: 760px)"),
+            "历史记录列间距不应依赖 760px 硬断点，否则收窄到临界宽度会突然跳变"
+        );
+        assert!(
+            !html.contains("<th style=\"text-align:right\">下载速度</th>"),
+            "访问来源列应通过专属 class 控制左侧留白"
         );
     }
 
@@ -1146,26 +1168,54 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_use_fixed_widths_for_compact_history_metric_columns() {
+    fn embedded_index_html_should_use_responsive_history_table_columns() {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("<col class=\"history-col-time\">")
-                && html.contains("<col class=\"history-col-domain\">")
-                && html.contains("<col class=\"history-col-latency\">")
-                && html.contains("<col class=\"history-col-speed\">")
-                && html.contains("<col class=\"history-col-network\">"),
-            "测速记录列宽应通过命名 col 控制，避免继续使用平均百分比分配"
+            html.contains(
+                ".history-table {\n      --history-grid-columns: 112px minmax(150px, 1fr) clamp(86px, 12vw, 118px) clamp(90px, 13vw, 126px) max-content;"
+            ),
+            "测速记录应使用明确的 grid 列轨道，让访问来源按内容完整显示并通过横向滚动承接超长内容"
+        );
+        assert!(
+            !html.contains("clamp(174px, 21vw, 200px)"),
+            "访问来源列不应再设置固定上限，否则较长归属地仍会被省略"
         );
         assert!(
             html.contains(
-                ".history-col-time {\n      width: 118px;\n    }\n\n    .history-col-latency {\n      width: 96px;\n    }\n\n    .history-col-speed {\n      width: 100px;\n    }"
+                ".history-table thead,\n    .history-table tbody,\n    .history-table tr {\n      display: contents;\n    }"
             ),
-            "时间、HTTPS 和下载速度列应使用更窄的固定宽度"
+            "历史表格行应交给同一套 grid 轨道排布，让表头和数据列保持对齐"
         );
         assert!(
-            !html.contains("<col style=\"width: 16%\">"),
-            "测速记录表格不应继续使用旧的百分比列宽"
+            !html.contains("<colgroup>")
+                && !html.contains("table-layout: fixed;")
+                && !html.contains(".history-col-network {\n      width: auto;"),
+            "历史记录不应继续依赖 fixed table 和 auto col，否则访问来源会承接多余空白"
+        );
+        assert!(
+            html.contains(".history-table .empty-row {\n      grid-column: 1 / -1;\n    }"),
+            "加载中和空状态行应跨越整个 grid 表格"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_keep_history_https_values_fully_visible() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".history-latency-cell {\n      min-width: max-content;\n    }"),
+            "HTTPS 指标列应按内容保留最小宽度，避免窄屏下数值被挤成省略号"
+        );
+        assert!(
+            html.contains(".history-latency-main,\n    .history-latency-jitter {\n      overflow: visible;\n      text-overflow: clip;\n      white-space: nowrap;\n    }"),
+            "HTTPS 主延迟和抖动值都应完整显示，不应使用省略号截断"
+        );
+        assert!(
+            !html.contains(
+                ".history-latency-jitter,\n    .history-network-location {\n      overflow: hidden;"
+            ),
+            "HTTPS 抖动值不应继续复用访问来源的省略号样式"
         );
     }
 

@@ -702,30 +702,23 @@
 
     table {
       width: 100%;
-      min-width: 760px;
+      min-width: 100%;
       border-collapse: collapse;
-      table-layout: fixed;
       font-size: .84rem;
     }
 
-    .history-col-time {
-      width: 118px;
+    .history-table {
+      --history-grid-columns: 112px minmax(150px, 1fr) clamp(86px, 12vw, 118px) clamp(90px, 13vw, 126px) max-content;
+      display: grid;
+      grid-template-columns: var(--history-grid-columns);
+      border-collapse: separate;
+      border-spacing: 0;
     }
 
-    .history-col-latency {
-      width: 96px;
-    }
-
-    .history-col-speed {
-      width: 100px;
-    }
-
-    .history-col-domain {
-      width: 30%;
-    }
-
-    .history-col-network {
-      width: auto;
+    .history-table thead,
+    .history-table tbody,
+    .history-table tr {
+      display: contents;
     }
 
     th {
@@ -754,11 +747,24 @@
 
     .history-table th,
     .history-table td {
-      padding: 10px;
+      padding: 8px;
     }
 
+    .history-table th,
+    .history-table td {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .history-table tbody td {
+      min-height: 54px;
+    }
+
+    .history-table .col-domain,
     .history-table .col-network {
-      padding-left: 13px;
+      padding-left: clamp(8px, 1.55vw, 14px);
     }
 
     .col-speed {
@@ -767,6 +773,20 @@
       font-weight: 800;
       text-align: right;
       white-space: nowrap;
+    }
+
+    .col-time {
+      font-family: var(--mono-stack);
+      white-space: nowrap;
+    }
+
+    .col-speed-header {
+      text-align: right;
+    }
+
+    .history-table .col-speed,
+    .history-table .col-speed-header {
+      justify-content: flex-end;
     }
 
     .col-latency {
@@ -778,6 +798,13 @@
     .history-network-cell {
       display: grid;
       gap: 4px;
+    }
+
+    .history-latency-cell {
+      min-width: max-content;
+    }
+
+    .history-network-cell {
       min-width: 0;
     }
 
@@ -787,13 +814,29 @@
       font-weight: 800;
     }
 
+    .history-network-ip {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-latency-main,
+    .history-latency-jitter {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: nowrap;
+    }
+
     .history-latency-jitter,
+    .history-network-location {
+      color: var(--text-sub);
+      font-size: .76rem;
+    }
+
     .history-network-location {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: var(--text-sub);
-      font-size: .76rem;
     }
 
     .history-network-meta {
@@ -815,6 +858,7 @@
       display: grid;
       gap: 4px;
       min-width: 0;
+      width: 100%;
     }
 
     .history-domain-label,
@@ -857,6 +901,10 @@
       padding: 26px;
       color: #999;
       text-align: center;
+    }
+
+    .history-table .empty-row {
+      grid-column: 1 / -1;
     }
 
     @media (max-width: 640px) {
@@ -975,6 +1023,10 @@
       .history-toolbar {
         grid-template-columns: 1fr;
         padding: 12px;
+      }
+
+      table {
+        min-width: 680px;
       }
 
       .modal-header {
@@ -1099,19 +1151,12 @@
       </form>
       <div class="table-container">
         <table class="history-table">
-          <colgroup>
-            <col class="history-col-time">
-            <col class="history-col-domain">
-            <col class="history-col-latency">
-            <col class="history-col-speed">
-            <col class="history-col-network">
-          </colgroup>
           <thead>
             <tr>
-              <th>时间</th>
-              <th>域名</th>
+              <th class="col-time">时间</th>
+              <th class="col-domain">域名</th>
               <th class="col-latency">HTTPS</th>
-              <th style="text-align:right">下载速度</th>
+              <th class="col-speed-header">下载速度</th>
               <th class="col-network">访问来源</th>
             </tr>
           </thead>
@@ -1613,8 +1658,8 @@
         els.historyBody.innerHTML = records.map(record => {
           const speed = record.download_mbps ?? 0;
           return `<tr>
-            <td>${formatTime(record.created_at)}</td>
-            <td>
+            <td class="col-time">${formatTime(record.created_at)}</td>
+            <td class="col-domain">
               <div class="history-domain-cell">
                 <span class="history-domain-label">${escapeHtml(historyTargetLabel(record))}</span>
                 <span class="history-domain-host">${escapeHtml(historyTargetHost(record))}</span>
