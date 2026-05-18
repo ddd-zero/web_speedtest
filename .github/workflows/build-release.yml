@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 env:
-  BIN_NAME: web_speed
+  BIN_NAME: web_speedtest
   TARGET: x86_64-unknown-linux-musl
   CARGO_TERM_COLOR: always
 
@@ -31,13 +31,13 @@ jobs:
       matrix:
         include:
           - variant: 普通
-            artifact: web_speed-linux-amd64
+            artifact: web_speedtest-linux-amd64
             rustflags: -C target-cpu=x86-64 -C target-feature=-avx,-avx2,-avx512f,-avx512bw,-avx512cd,-avx512dq,-avx512vl
           - variant: AVX2
-            artifact: web_speed-linux-amd64-avx2
+            artifact: web_speedtest-linux-amd64-avx2
             rustflags: -C target-cpu=x86-64-v3
           - variant: AVX512
-            artifact: web_speed-linux-amd64-avx512
+            artifact: web_speedtest-linux-amd64-avx512
             rustflags: -C target-cpu=x86-64-v4
 
     steps:
