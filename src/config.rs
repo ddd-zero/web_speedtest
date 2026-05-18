@@ -275,7 +275,7 @@ fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
                 host,
                 cname: display_cname(item.cname.as_deref()),
                 trace_url: format!("{base_url}/cdn-cgi/trace"),
-                download_url: format!("{base_url}/200mb.test"),
+                download_url: format!("{base_url}/200mb.7z"),
             })
         })
         .collect()
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(config.targets[1].cname, "-");
         assert_eq!(
             config.targets[1].download_url,
-            "https://line-b.example.com/200mb.test"
+            "https://line-b.example.com/200mb.7z"
         );
         assert_eq!(config.targets[2].label, "新增线路");
         assert_eq!(config.targets[2].host, "new.example.com");
