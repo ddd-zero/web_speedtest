@@ -20,7 +20,9 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::{ConfigError, HistorySettings, RuntimeConfig, TestSettings, TestTarget},
+    config::{
+        ConfigError, DisplaySettings, HistorySettings, RuntimeConfig, TestSettings, TestTarget,
+    },
     models::SaveResultResponse,
     store::{QueryFilter, SaveResultInput, SpeedStore, StoreError},
 };
@@ -110,6 +112,7 @@ pub struct ClientConfig {
     pub targets: Vec<TestTarget>,
     pub test: TestSettings,
     pub history: HistorySettings,
+    pub display: DisplaySettings,
 }
 
 pub fn build_router(store: SpeedStore, runtime_config: RuntimeConfig) -> Router {
@@ -156,6 +159,7 @@ async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
         targets: state.config.targets.clone(),
         test: state.config.test.clone(),
         history: state.config.history.clone(),
+        display: state.config.display.clone(),
     })
 }
 
@@ -371,6 +375,22 @@ mod tests {
         let path = super::resolve_config_path_from_env(|_| None);
 
         assert_eq!(path, PathBuf::from("config.toml"));
+    }
+
+    #[test]
+    fn client_config_should_include_display_settings() {
+        let payload = super::ClientConfig {
+            targets: Vec::new(),
+            test: crate::config::TestSettings::default(),
+            history: crate::config::HistorySettings::default(),
+            display: crate::config::DisplaySettings {
+                show_domains: false,
+            },
+        };
+
+        let json = serde_json::to_value(payload).expect("client config should serialize");
+
+        assert_eq!(json["display"]["show_domains"], false);
     }
 
     #[test]
@@ -692,6 +712,45 @@ mod tests {
         assert!(
             html.contains("${renderCnameBadge(target.cname)}"),
             "测速列表仍应渲染 CNAME 徽标"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_hide_domain_text_when_config_disables_domains() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("display: {\n        show_domains: true,\n      },"),
+            "前端状态应默认显示域名，保持旧配置行为"
+        );
+        assert!(
+            html.contains("state.display = {\n          ...state.display,\n          ...(config.display || {}),\n        };"),
+            "前端应从 /api/config 合并 display 设置"
+        );
+        assert!(
+            html.contains("function shouldShowDomains()")
+                && html.contains("function hiddenDomainText() {\n      return \"-\";\n    }"),
+            "域名可见性判断和占位符应集中封装"
+        );
+        assert!(
+            html.contains("if (!shouldShowDomains()) return hiddenDomainText();"),
+            "主页域名和历史域名值应在关闭显示时返回 -"
+        );
+        assert!(
+            html.contains("return formatHistoryTargetLabelForDisplay(target, record);")
+                && html.contains("function formatHistoryTargetLabelForDisplay(target, record)")
+                && html.contains("looksLikeDomainLabel(label, target?.host || record?.domain)"),
+            "历史记录应保留非域名线路名，只隐藏看起来像域名的线路名"
+        );
+        assert!(
+            html.contains("if (!shouldShowDomains()) return \"\";")
+                && html.contains("function renderCnameBadge(cname)"),
+            "关闭域名显示时主页不应继续显示 CNAME"
+        );
+        assert!(
+            html.contains("els.historyDomain.disabled = true;")
+                && html.contains("els.historyDomain.innerHTML = `<option value=\"\">-</option>`;"),
+            "关闭域名显示时历史筛选下拉也不应露出域名"
         );
     }
 

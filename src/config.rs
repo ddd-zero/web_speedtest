@@ -19,6 +19,7 @@ pub struct RuntimeConfig {
     pub database: DatabaseConfig,
     pub test: TestSettings,
     pub history: HistorySettings,
+    pub display: DisplaySettings,
     pub targets: Vec<TestTarget>,
 }
 
@@ -47,6 +48,11 @@ pub struct HistorySettings {
     pub max_limit: usize,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DisplaySettings {
+    pub show_domains: bool,
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 struct FileConfig {
     #[serde(default)]
@@ -57,6 +63,8 @@ struct FileConfig {
     test: TestSettings,
     #[serde(default)]
     history: HistorySettings,
+    #[serde(default)]
+    display: DisplaySettings,
     #[serde(default)]
     domains: DomainConfig,
 }
@@ -133,6 +141,7 @@ impl RuntimeConfig {
             database: file_config.database,
             test: file_config.test.normalized(),
             history: file_config.history.normalized()?,
+            display: file_config.display,
             targets,
         })
     }
@@ -203,6 +212,12 @@ impl HistorySettings {
         requested
             .unwrap_or(self.default_limit)
             .clamp(1, self.max_limit)
+    }
+}
+
+impl Default for DisplaySettings {
+    fn default() -> Self {
+        Self { show_domains: true }
     }
 }
 
@@ -476,6 +491,38 @@ mod tests {
 
         assert_eq!(config.history.default_limit, 40);
         assert_eq!(config.history.max_limit, 90);
+    }
+
+    #[test]
+    fn runtime_config_should_read_display_settings_from_toml() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speedtest-display-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let config = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [display]
+            show_domains = false
+
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ))
+        .expect("config should parse");
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert!(!config.display.show_domains);
     }
 
     #[test]

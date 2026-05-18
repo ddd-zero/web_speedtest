@@ -1157,6 +1157,9 @@
         default_limit: 80,
         max_limit: 200,
       },
+      display: {
+        show_domains: true,
+      },
       targetStates: new Map(),
       activeTargetKey: null,
       currentClientIp: "",
@@ -1247,6 +1250,10 @@
         state.history = {
           ...state.history,
           ...(config.history || {}),
+        };
+        state.display = {
+          ...state.display,
+          ...(config.display || {}),
         };
         state.targetStates = new Map(state.targets.map(target => [target.key, createTargetState()]));
         renderHistoryDomainOptions();
@@ -1681,6 +1688,7 @@
     }
 
     function renderCnameBadge(cname) {
+      if (!shouldShowDomains()) return "";
       if (!cname || cname === "-") return "";
       const displayCname = cleanText(cname);
       return `<span class="target-cname" title="${escapeHtml(displayCname)}" aria-label="CNAME ${escapeHtml(displayCname)}">${escapeHtml(displayCname)}</span>`;
@@ -1756,6 +1764,12 @@
     }
 
     function renderHistoryDomainOptions() {
+      if (!shouldShowDomains()) {
+        els.historyDomain.disabled = true;
+        els.historyDomain.innerHTML = `<option value="">-</option>`;
+        return;
+      }
+      els.historyDomain.disabled = false;
       els.historyDomain.innerHTML = `<option value="">全部域名</option>` + state.targets
         .map(target => `<option value="${escapeHtml(target.host)}">${escapeHtml(target.label)} / ${escapeHtml(target.host)}</option>`)
         .join("");
@@ -1763,10 +1777,19 @@
 
     function historyTargetLabel(record) {
       const target = historyTargetForRecord(record);
-      return target?.label || record.domain || "未知域名";
+      return formatHistoryTargetLabelForDisplay(target, record);
+    }
+
+    function formatHistoryTargetLabelForDisplay(target, record) {
+      const label = cleanText(target?.label || record.domain || "未知域名");
+      if (!shouldShowDomains() && looksLikeDomainLabel(label, target?.host || record?.domain)) {
+        return hiddenDomainText();
+      }
+      return label;
     }
 
     function historyTargetHost(record) {
+      if (!shouldShowDomains()) return hiddenDomainText();
       const target = historyTargetForRecord(record);
       return target?.host || record.domain || "未知域名";
     }
@@ -1999,6 +2022,7 @@
 
     function formatTargetLabelForDisplay(target) {
       const label = cleanText(target?.label);
+      if (!shouldShowDomains() && looksLikeDomainLabel(label, target?.host)) return hiddenDomainText();
       if (!state.isPrivacyMode || !label) return label;
 
       const host = cleanText(target?.host);
@@ -2010,8 +2034,23 @@
 
     function formatTargetHostForDisplay(host) {
       const value = cleanText(host);
+      if (!shouldShowDomains()) return hiddenDomainText();
       if (!state.isPrivacyMode || !value) return value;
       return maskDomainForPrivacy(value);
+    }
+
+    function shouldShowDomains() {
+      return state.display.show_domains !== false;
+    }
+
+    function hiddenDomainText() {
+      return "-";
+    }
+
+    function looksLikeDomainLabel(label, host) {
+      const value = cleanText(label);
+      if (!value) return false;
+      return value === cleanText(host) || value.includes(".");
     }
 
     function maskDomainForPrivacy(value) {

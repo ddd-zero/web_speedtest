@@ -27,6 +27,10 @@ default_limit = 80
 # 历史记录接口允许的最大返回数量，程序会限制在 1 到 1000 之间，且必须不小于 default_limit。
 max_limit = 200
 
+[display]
+# 是否在前端显示测速域名和 CNAME。设为 false 时，主页和历史记录里的域名显示为 "-"。
+show_domains = true
+
 [domains]
 # 外部 YAML 线路文件路径。该文件必须包含 domains 数组，每项至少提供 url。
 path = "config.yaml"
