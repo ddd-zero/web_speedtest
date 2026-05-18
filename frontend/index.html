@@ -170,6 +170,53 @@
       border: 1px solid #ddd6ce;
     }
 
+    .icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      padding: 0;
+      color: #665d57;
+      background: #fff;
+      border: 1px solid #ddd6ce;
+      box-shadow: none;
+      flex-shrink: 0;
+    }
+
+    .icon-btn svg {
+      display: block;
+      width: 18px;
+      height: 18px;
+    }
+
+    .icon-btn:hover:not(:disabled),
+    .icon-btn:active:not(:disabled),
+    .icon-btn.click-feedback:not(:disabled) {
+      color: var(--accent);
+      background: #fff4ed;
+      border-color: rgba(218, 119, 86, .36);
+    }
+
+    .privacy-toggle-btn[aria-pressed="true"] {
+      color: #fff;
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 4px 15px rgba(218, 119, 86, .24);
+    }
+
+    .privacy-toggle-btn .privacy-eye-off {
+      display: none;
+    }
+
+    .privacy-toggle-btn[aria-pressed="true"] .privacy-eye {
+      display: none;
+    }
+
+    .privacy-toggle-btn[aria-pressed="true"] .privacy-eye-off {
+      display: block;
+    }
+
     .history-fab {
       position: fixed;
       right: 20px;
@@ -841,11 +888,21 @@
 
       .top-actions {
         width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px;
+        align-items: stretch;
       }
 
       .top-actions button,
       .target-row button {
         width: 100%;
+      }
+
+      .top-actions .privacy-toggle-btn {
+        width: 42px;
+        min-width: 42px;
+        height: auto;
+        min-height: 42px;
       }
 
       .modal-overlay {
@@ -911,6 +968,21 @@
         <div class="top-actions">
           <button class="btn-primary" id="one-click-download-btn" type="button" disabled>一键测速</button>
           <button class="btn-secondary" id="refresh-latency-btn" type="button">重测延迟</button>
+          <button class="icon-btn privacy-toggle-btn" id="privacy-toggle-btn" type="button" aria-label="开启隐私模式"
+            aria-pressed="false">
+            <svg class="privacy-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="privacy-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+              <path d="M9.9 4.2A10.7 10.7 0 0 1 12 4c6.5 0 10 8 10 8a18.2 18.2 0 0 1-3.1 4.3"></path>
+              <path d="M6.1 6.1C3.5 7.8 2 12 2 12s3.5 8 10 8c1.5 0 2.9-.4 4.1-1"></path>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -1043,6 +1115,7 @@
       isDownloading: false,
       isOneClickDownloading: false,
       isHistoryOpen: false,
+      isPrivacyMode: false,
       downloadController: null,
       stopRequested: false,
       oneClickStopRequested: false,
@@ -1053,6 +1126,7 @@
       latencyStatus: document.getElementById("latency-status"),
       oneClickDownloadBtn: document.getElementById("one-click-download-btn"),
       refreshLatencyBtn: document.getElementById("refresh-latency-btn"),
+      privacyBtn: document.getElementById("privacy-toggle-btn"),
       historyBtn: document.getElementById("history-btn"),
       historyModal: document.getElementById("history-modal"),
       closeHistoryBtn: document.getElementById("close-history-btn"),
@@ -1078,6 +1152,7 @@
 
     els.oneClickDownloadBtn.addEventListener("click", runOneClickDownloadSequence);
     els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
+    els.privacyBtn.addEventListener("click", togglePrivacyMode);
     els.historyBtn.addEventListener("click", () => runAfterButtonClickFeedback(openHistory));
     els.closeHistoryBtn.addEventListener("click", () => runAfterButtonClickFeedback(() => toggleHistory(false)));
     els.historyModal.addEventListener("click", event => {
@@ -1090,6 +1165,14 @@
     window.addEventListener("keydown", event => {
       if (event.key === "Escape" && state.isHistoryOpen) toggleHistory(false);
     });
+
+    function togglePrivacyMode() {
+      state.isPrivacyMode = !state.isPrivacyMode;
+      els.privacyBtn.setAttribute("aria-pressed", String(state.isPrivacyMode));
+      els.privacyBtn.setAttribute("aria-label", state.isPrivacyMode ? "关闭隐私模式" : "开启隐私模式");
+      updateClientInfo();
+      renderTargetList();
+    }
 
     async function init() {
       await Promise.all([loadConfig(), loadClientInfo()]);
@@ -1505,12 +1588,12 @@
           <div class="target-row-progress" style="width:${progress}%"></div>
           <div>
             <div class="target-name">
-              <span class="target-label-text">${escapeHtml(target.label)}</span>
+              <span class="target-label-text">${escapeHtml(formatTargetLabelForDisplay(target))}</span>
               ${isRecommended ? `<span class="badge">推荐</span>` : ""}
               ${renderTargetStatus(targetState)}
             </div>
             <div class="target-host">
-              <span class="target-host-text">${escapeHtml(target.host)}</span>
+              <span class="target-host-text">${escapeHtml(formatTargetHostForDisplay(target.host))}</span>
               ${renderCnameBadge(target.cname)}
               ${renderColoBadge(target.key)}
             </div>
@@ -1544,7 +1627,8 @@
 
     function renderCnameBadge(cname) {
       if (!cname || cname === "-") return "";
-      return `<span class="target-cname" title="CNAME ${escapeHtml(cname)}">CNAME ${escapeHtml(cname)}</span>`;
+      const displayCname = formatTargetHostForDisplay(cname);
+      return `<span class="target-cname" title="CNAME ${escapeHtml(displayCname)}">CNAME ${escapeHtml(displayCname)}</span>`;
     }
 
     function colorForColo(colo) {
@@ -1775,11 +1859,149 @@
     }
 
     function updateClientInfo() {
-      els.clientIp.textContent = state.currentClientIp || "待检测";
-      els.clientLocation.textContent = [state.currentIpInfo.country, state.currentIpInfo.region, state.currentIpInfo.city]
-        .filter(Boolean)
-        .join(" ") || "未知";
+      els.clientIp.textContent = formatClientIpForDisplay(state.currentClientIp);
+      els.clientLocation.textContent = formatClientLocationForDisplay();
       els.clientIsp.textContent = state.currentIpInfo.isp || "未知";
+    }
+
+    // 隐私模式只替换展示文本，state 中的真实数据仍用于测速和保存结果。
+    function formatClientIpForDisplay(value) {
+      const ip = cleanText(value);
+      if (!ip) return "待检测";
+      return state.isPrivacyMode ? maskIpForPrivacy(ip) : ip;
+    }
+
+    function formatClientLocationForDisplay() {
+      const parts = [state.currentIpInfo.country, state.currentIpInfo.region, state.currentIpInfo.city]
+        .map(cleanText)
+        .filter(Boolean);
+      if (!parts.length) return "未知";
+      return state.isPrivacyMode ? maskClientLocationForPrivacy(parts) : parts.join(" ");
+    }
+
+    function maskClientLocationForPrivacy(parts) {
+      const locationParts = parts.map(cleanText).filter(Boolean);
+      if (!locationParts.length) return "未知";
+      return [...locationParts.slice(0, -1), "***"].join(" ");
+    }
+
+    function maskIpForPrivacy(value) {
+      const ip = cleanText(value);
+      if (!ip) return "";
+      const dottedMapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+      if (dottedMapped) return maskIpv4ForPrivacy(dottedMapped[1]);
+      const mappedIpv4 = ipv6MappedIpv4ForPrivacy(ip);
+      if (mappedIpv4) return maskIpv4ForPrivacy(mappedIpv4);
+      if (ip.includes(":")) return maskIpv6ForPrivacy(ip);
+      if (ip.includes(".")) return maskIpv4ForPrivacy(ip);
+      return ip;
+    }
+
+    function maskIpv4ForPrivacy(value) {
+      const parts = cleanText(value).split(".");
+      if (parts.length !== 4 || parts.some(part => !/^\d{1,3}$/.test(part))) return value;
+      if (parts.some(part => Number(part) > 255)) return value;
+      return `${parts[0]}.${parts[1]}.*.*`;
+    }
+
+    function maskIpv6ForPrivacy(value) {
+      const segments = expandIpv6Segments(value);
+      if (!segments) return value;
+      return `${Number.parseInt(segments[0], 16).toString(16)}:${Number.parseInt(segments[1], 16).toString(16)}:${Number.parseInt(segments[2], 16).toString(16)}::*`;
+    }
+
+    function ipv6MappedIpv4ForPrivacy(value) {
+      const segments = expandIpv6Segments(value);
+      if (!segments) return null;
+      const prefixIsMapped = segments
+        .slice(0, 5)
+        .every(segment => Number.parseInt(segment, 16) === 0)
+        && Number.parseInt(segments[5], 16) === 0xffff;
+      if (!prefixIsMapped) return null;
+
+      const high = Number.parseInt(segments[6], 16);
+      const low = Number.parseInt(segments[7], 16);
+      return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+    }
+
+    function expandIpv6Segments(value) {
+      const input = cleanText(value).toLowerCase();
+      if (!input.includes(":") || input.includes(".")) return null;
+      const compressedParts = input.split("::");
+      if (compressedParts.length > 2) return null;
+
+      const left = compressedParts[0] ? compressedParts[0].split(":") : [];
+      const right = compressedParts.length === 2 && compressedParts[1] ? compressedParts[1].split(":") : [];
+      const explicit = [...left, ...right];
+      if (explicit.some(segment => !/^[0-9a-f]{1,4}$/.test(segment))) return null;
+
+      if (compressedParts.length === 1) return explicit.length === 8 ? explicit : null;
+
+      const zeroCount = 8 - explicit.length;
+      if (zeroCount < 1) return null;
+      return [...left, ...Array(zeroCount).fill("0"), ...right];
+    }
+
+    function formatTargetLabelForDisplay(target) {
+      const label = cleanText(target?.label);
+      if (!state.isPrivacyMode || !label) return label;
+
+      const host = cleanText(target?.host);
+      if (host && label.includes(host)) {
+        return label.split(host).join(maskDomainForPrivacy(host));
+      }
+      return label.includes(".") ? maskDomainForPrivacy(label) : label;
+    }
+
+    function formatTargetHostForDisplay(host) {
+      const value = cleanText(host);
+      if (!state.isPrivacyMode || !value) return value;
+      return maskDomainForPrivacy(value);
+    }
+
+    function maskDomainForPrivacy(value) {
+      const raw = cleanText(value);
+      if (!raw) return "";
+      const hostname = extractHostname(raw);
+      if (!hostname) return raw;
+
+      const labels = hostname.split(".").filter(Boolean);
+      if (labels.length < 2) return raw.replace(hostname, maskDomainLabel(hostname));
+
+      // 保留首级线路编号和顶级域名，只隐藏中间可识别的业务域名片段。
+      const maskedHostname = labels.map((label, index) => {
+        const isTopLevelDomain = index === labels.length - 1;
+        const isFirstRouteLabel = labels.length >= 3 && index === 0;
+        return isTopLevelDomain || isFirstRouteLabel ? label : maskDomainLabel(label);
+      }).join(".");
+      return raw.replace(hostname, maskedHostname);
+    }
+
+    function maskDomainLabel(label) {
+      const value = cleanText(label);
+      if (!value) return "";
+      if (value.length <= 1) return "*";
+      if (value.length === 2) return `${value[0]}*`;
+      if (value.length <= 4) return `${value[0]}${"*".repeat(value.length - 2)}${value[value.length - 1]}`;
+
+      const visiblePrefixLength = value.length >= 8 ? 2 : 1;
+      const maskLength = Math.max(2, value.length - visiblePrefixLength - 1);
+      return `${value.slice(0, visiblePrefixLength)}${"*".repeat(maskLength)}${value[value.length - 1]}`;
+    }
+
+    function extractHostname(value) {
+      const raw = cleanText(value);
+      if (!raw) return "";
+      try {
+        const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+        return cleanText(url.hostname);
+      } catch (error) {
+        const hostWithPort = raw.split(/[/?#]/)[0];
+        if (hostWithPort.startsWith("[") && hostWithPort.includes("]")) {
+          return hostWithPort.slice(1, hostWithPort.indexOf("]"));
+        }
+        return hostWithPort.split(":")[0];
+      }
     }
 
     function parseTrace(text) {

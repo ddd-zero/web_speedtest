@@ -465,6 +465,110 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_offer_main_page_privacy_toggle() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("id=\"privacy-toggle-btn\""),
+            "主页顶部应提供隐私模式按钮"
+        );
+        assert!(
+            html.contains("class=\"icon-btn privacy-toggle-btn\""),
+            "隐私按钮应使用紧凑图标按钮样式，避免挤占主操作按钮"
+        );
+        assert!(
+            html.contains("aria-pressed=\"false\""),
+            "隐私按钮应通过 aria-pressed 暴露开关状态"
+        );
+        assert!(
+            html.contains("privacyBtn: document.getElementById(\"privacy-toggle-btn\"),"),
+            "脚本应缓存隐私按钮元素"
+        );
+        assert!(
+            html.contains("isPrivacyMode: false"),
+            "隐私模式默认应关闭，避免用户看到的主页面信息被意外脱敏"
+        );
+        assert!(
+            html.contains("els.privacyBtn.addEventListener(\"click\", togglePrivacyMode);"),
+            "点击隐私按钮应切换隐私模式"
+        );
+        assert!(
+            html.contains("function togglePrivacyMode()"),
+            "隐私模式切换逻辑应集中封装，避免散落在事件回调里"
+        );
+        assert!(
+            html.contains(
+                "els.privacyBtn.setAttribute(\"aria-pressed\", String(state.isPrivacyMode));"
+            ),
+            "切换后应同步按钮可访问状态"
+        );
+        assert!(
+            html.contains("updateClientInfo();\n      renderTargetList();"),
+            "切换隐私模式后应刷新用户 IP 和域名延迟列表"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_mask_home_ip_and_target_domains_in_privacy_mode() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("function formatClientIpForDisplay(value)")
+                && html.contains("function maskIpForPrivacy(value)")
+                && html.contains("function maskIpv4ForPrivacy(value)")
+                && html.contains("function maskIpv6ForPrivacy(value)"),
+            "用户 IP 应通过独立展示函数脱敏，保留原始 state 数据"
+        );
+        assert!(
+            html.contains("return `${parts[0]}.${parts[1]}.*.*`;"),
+            "IPv4 隐私展示应只保留前 16 位"
+        );
+        assert!(
+            html.contains(
+                "return `${Number.parseInt(segments[0], 16).toString(16)}:${Number.parseInt(segments[1], 16).toString(16)}:${Number.parseInt(segments[2], 16).toString(16)}::*`;"
+            ),
+            "IPv6 隐私展示应按 /48 保留前三段"
+        );
+        assert!(
+            html.contains(
+                "els.clientIp.textContent = formatClientIpForDisplay(state.currentClientIp);"
+            ),
+            "用户 IP 渲染路径应接入隐私展示函数"
+        );
+        assert!(
+            html.contains("function formatTargetLabelForDisplay(target)")
+                && html.contains("function formatTargetHostForDisplay(host)")
+                && html.contains("function maskDomainForPrivacy(value)")
+                && html.contains("function maskDomainLabel(label)"),
+            "域名延迟对比应通过独立展示函数脱敏线路标签和主机名"
+        );
+        assert!(
+            html.contains("${escapeHtml(formatTargetLabelForDisplay(target))}")
+                && html.contains("${escapeHtml(formatTargetHostForDisplay(target.host))}"),
+            "主页面线路渲染应使用脱敏后的标签和主机名"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_mask_last_client_location_part_in_privacy_mode() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("function formatClientLocationForDisplay()")
+                && html.contains("function maskClientLocationForPrivacy(parts)"),
+            "用户位置应通过独立展示函数脱敏，保留原始 state 数据"
+        );
+        assert!(
+            html.contains("els.clientLocation.textContent = formatClientLocationForDisplay();"),
+            "用户位置渲染路径应接入隐私展示函数"
+        );
+        assert!(
+            html.contains("return [...locationParts.slice(0, -1), \"***\"].join(\" \");"),
+            "隐私模式应直接把位置最后一段替换成 ***"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_keep_compact_target_rows_single_line() {
         let html = super::embedded_index_html();
 
@@ -495,7 +599,9 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("html {\n      min-height: 100%;\n      scrollbar-gutter: stable;\n    }"),
+            html.contains(
+                "html {\n      min-height: 100%;\n      scrollbar-gutter: stable;\n    }"
+            ),
             "根元素不应锁死滚动，应保留下拉刷新需要的顶层滚动链路"
         );
         assert!(
@@ -633,7 +739,9 @@ mod tests {
             "固定宽度后应收窄横向内边距，保留舒适触控面积"
         );
         assert!(
-            !html.contains("      min-width: 46px;\n      min-height: 118px;\n      padding: 14px 10px;"),
+            !html.contains(
+                "      min-width: 46px;\n      min-height: 118px;\n      padding: 14px 10px;"
+            ),
             "不应继续用内容最小宽度叠加 padding 的方式决定视觉宽度"
         );
     }
@@ -651,7 +759,9 @@ mod tests {
             "测速记录浮动按钮应使用显式逐字堆叠的视觉标签"
         );
         assert!(
-            html.contains(".history-fab-label {\n      display: inline-flex;\n      flex-direction: column;"),
+            html.contains(
+                ".history-fab-label {\n      display: inline-flex;\n      flex-direction: column;"
+            ),
             "逐字标签应通过 flex 纵向排列，避免依赖 writing-mode"
         );
         assert!(
@@ -659,13 +769,11 @@ mod tests {
             "每个中文字应作为独立块级单元参与布局"
         );
         assert!(
-            html.contains("aria-label=\"打开测速记录\"")
-                && html.contains("aria-hidden=\"true\""),
+            html.contains("aria-label=\"打开测速记录\"") && html.contains("aria-hidden=\"true\""),
             "视觉逐字标签应对读屏隐藏，由按钮 aria-label 提供完整语义"
         );
         assert!(
-            !html.contains("writing-mode: vertical-rl;")
-                && !html.contains(">测速记录</button>"),
+            !html.contains("writing-mode: vertical-rl;") && !html.contains(">测速记录</button>"),
             "不应继续依赖原生 button 文本的 writing-mode 竖排"
         );
     }
@@ -699,9 +807,7 @@ mod tests {
             "移动端按钮应禁用系统蓝色触摸高亮，避免点击后出现选中提示"
         );
         assert!(
-            html.contains(
-                "button:focus:not(:focus-visible) {\n      outline: none;\n    }"
-            ),
+            html.contains("button:focus:not(:focus-visible) {\n      outline: none;\n    }"),
             "指针点击触发的按钮焦点不应显示默认轮廓"
         );
         assert!(
@@ -769,9 +875,7 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains(
-                r#"onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')""#
-            ),
+            html.contains(r#"onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')""#),
             "动态渲染的开始测速按钮应先播放点击反馈，再触发测速动作"
         );
         assert!(
