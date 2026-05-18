@@ -464,16 +464,28 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_keep_main_page_scroll_locked_to_target_list() {
+    fn embedded_index_html_should_allow_root_pull_refresh_while_layout_stays_viewport_sized() {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("height: 100dvh;"),
-            "页面根容器应锁定到动态视口高度，避免 1920x921 等桌面视口出现外层滚动"
+            html.contains("html {\n      min-height: 100%;\n      scrollbar-gutter: stable;\n    }"),
+            "根元素不应锁死滚动，应保留下拉刷新需要的顶层滚动链路"
         );
         assert!(
-            html.contains("overflow: hidden;"),
-            "外层页面不应参与滚动，滚动应保留在测速列表内部"
+            html.contains(
+                "body {\n      height: 100dvh;\n      margin: 0;\n      padding: 22px;\n      box-sizing: border-box;\n      overflow-x: hidden;"
+            ),
+            "body 应继续按动态视口精确计算高度，但只限制横向溢出"
+        );
+        assert!(
+            !html.contains("html {\n      height: 100%;\n      overflow: hidden;"),
+            "html 不应继续使用 overflow hidden 阻断移动端下拉刷新"
+        );
+        assert!(
+            !html.contains(
+                "body {\n      height: 100dvh;\n      margin: 0;\n      padding: 22px;\n      box-sizing: border-box;\n      overflow: hidden;"
+            ),
+            "body 不应继续锁定纵向滚动"
         );
         assert!(
             html.contains("display: flex;\n      flex-direction: column;\n      min-height: 0;"),
