@@ -26,6 +26,8 @@ use crate::{
 };
 
 const IN_MEMORY_UPDATE_TOKEN_TTL_SECS: i64 = 30;
+const CONFIG_PATH_ENV: &str = "WEB_SPEEDTEST_CONFIG";
+const LEGACY_CONFIG_PATH_ENV: &str = "WEB_SPEED_CONFIG";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -124,9 +126,7 @@ pub fn build_router(store: SpeedStore, runtime_config: RuntimeConfig) -> Router 
 }
 
 pub async fn serve() -> Result<(), AppError> {
-    let config_path = std::env::var("WEB_SPEED_CONFIG")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("config.toml"));
+    let config_path = resolve_config_path_from_env(|name| std::env::var(name).ok());
     let config = RuntimeConfig::load(config_path)?;
     let listener = tokio::net::TcpListener::bind(config.listen_addr()).await?;
     let store = SpeedStore::open(&config.database.path)?;
@@ -137,6 +137,14 @@ pub async fn serve() -> Result<(), AppError> {
     )
     .await?;
     Ok(())
+}
+
+fn resolve_config_path_from_env(mut read_env: impl FnMut(&str) -> Option<String>) -> PathBuf {
+    // 新变量跟随项目名；保留旧变量是为了让已有部署升级后仍能找到配置文件。
+    read_env(CONFIG_PATH_ENV)
+        .or_else(|| read_env(LEGACY_CONFIG_PATH_ENV))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("config.toml"))
 }
 
 async fn index() -> Html<&'static str> {
@@ -324,6 +332,7 @@ mod tests {
     use axum::http::HeaderMap;
     use std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
         process::ExitCode,
     };
 
@@ -334,6 +343,34 @@ mod tests {
         let code = exit_code_for_error(&error);
 
         assert_eq!(code, ExitCode::from(78));
+    }
+
+    #[test]
+    fn config_path_should_prefer_current_project_env_var() {
+        let path = super::resolve_config_path_from_env(|name| match name {
+            "WEB_SPEEDTEST_CONFIG" => Some("new-config.toml".to_string()),
+            "WEB_SPEED_CONFIG" => Some("legacy-config.toml".to_string()),
+            _ => None,
+        });
+
+        assert_eq!(path, PathBuf::from("new-config.toml"));
+    }
+
+    #[test]
+    fn config_path_should_fallback_to_legacy_env_var() {
+        let path = super::resolve_config_path_from_env(|name| match name {
+            "WEB_SPEED_CONFIG" => Some("legacy-config.toml".to_string()),
+            _ => None,
+        });
+
+        assert_eq!(path, PathBuf::from("legacy-config.toml"));
+    }
+
+    #[test]
+    fn config_path_should_use_default_config_when_env_vars_are_missing() {
+        let path = super::resolve_config_path_from_env(|_| None);
+
+        assert_eq!(path, PathBuf::from("config.toml"));
     }
 
     #[test]

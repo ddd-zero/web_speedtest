@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn runtime_config_should_reject_missing_external_domain_file() {
         let missing_path = std::env::temp_dir().join(format!(
-            "web-speed-missing-domains-{}.yaml",
+            "web-speedtest-missing-domains-{}.yaml",
             std::process::id()
         ));
         let toml = format!(
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn runtime_config_should_reject_empty_external_domain_file() {
         let yaml_path = std::env::temp_dir().join(format!(
-            "web-speed-empty-domains-{}.yaml",
+            "web-speedtest-empty-domains-{}.yaml",
             std::process::id()
         ));
         std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn runtime_config_should_read_server_and_test_options_from_toml() {
         let yaml_path = std::env::temp_dir().join(format!(
-            "web-speed-options-domains-{}.yaml",
+            "web-speedtest-options-domains-{}.yaml",
             std::process::id()
         ));
         std::fs::write(
@@ -447,7 +447,7 @@ mod tests {
     #[test]
     fn runtime_config_should_read_history_limits_from_toml() {
         let yaml_path = std::env::temp_dir().join(format!(
-            "web-speed-history-domains-{}.yaml",
+            "web-speedtest-history-domains-{}.yaml",
             std::process::id()
         ));
         std::fs::write(
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn runtime_config_should_reject_invalid_history_limits() {
         let yaml_path = std::env::temp_dir().join(format!(
-            "web-speed-invalid-history-domains-{}.yaml",
+            "web-speedtest-invalid-history-domains-{}.yaml",
             std::process::id()
         ));
         std::fs::write(
@@ -513,7 +513,7 @@ mod tests {
     #[test]
     fn runtime_config_should_read_domains_from_yaml_and_apply_overrides() {
         let yaml_path =
-            std::env::temp_dir().join(format!("web-speed-domains-{}.yaml", std::process::id()));
+            std::env::temp_dir().join(format!("web-speedtest-domains-{}.yaml", std::process::id()));
         std::fs::write(
             &yaml_path,
             r#"
@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn runtime_config_should_reject_duplicate_domain_hosts() {
         let yaml_path = std::env::temp_dir().join(format!(
-            "web-speed-duplicate-domains-{}.yaml",
+            "web-speedtest-duplicate-domains-{}.yaml",
             std::process::id()
         ));
         std::fs::write(
@@ -607,7 +607,7 @@ mod tests {
     #[test]
     fn runtime_config_should_reject_missing_config_file() {
         let missing_path = std::env::temp_dir().join(format!(
-            "web-speed-missing-config-{}.toml",
+            "web-speedtest-missing-config-{}.toml",
             std::process::id()
         ));
         let result = RuntimeConfig::load(&missing_path);
@@ -618,7 +618,7 @@ mod tests {
     #[test]
     fn runtime_config_should_reject_empty_domain_sources() {
         let yaml_path = std::env::temp_dir().join(format!(
-            "web-speed-empty-config-{}.yaml",
+            "web-speedtest-empty-config-{}.yaml",
             std::process::id()
         ));
         std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");

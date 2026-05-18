@@ -1,5 +1,5 @@
-# Web Speed 示例配置文件
-# 使用方式：复制为 config.toml 后按需修改；也可以通过 WEB_SPEED_CONFIG 指定其他配置路径。
+# Web Speedtest 示例配置文件
+# 使用方式：复制为 config.toml 后按需修改；也可以通过 WEB_SPEEDTEST_CONFIG 指定其他配置路径。
 
 [server]
 # 服务监听地址。默认 127.0.0.1 仅允许本机访问；部署到局域网或公网时可改为 0.0.0.0。

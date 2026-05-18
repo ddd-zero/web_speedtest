@@ -1,0 +1,39 @@
+[Unit]
+Description=web_speedtest 网络测速服务
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=web_speedtest
+Group=web_speedtest
+WorkingDirectory=/var/lib/web_speedtest
+Environment=WEB_SPEEDTEST_CONFIG=/etc/web_speedtest/config.toml
+EnvironmentFile=-/etc/default/web_speedtest
+ExecStart=/opt/web_speedtest/web_speedtest
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0077
+
+# 服务只需要监听本地端口并写入测速数据库，默认收紧系统写入面。
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/web_speedtest
+StateDirectory=web_speedtest
+StateDirectoryMode=0750
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
