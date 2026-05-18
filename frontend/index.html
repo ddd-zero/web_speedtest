@@ -159,17 +159,32 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 46px;
-      min-height: 118px;
-      padding: 14px 10px;
+      width: 48px;
+      min-width: 48px;
+      max-width: 48px;
+      min-height: 105px;
+      box-sizing: border-box;
+      padding: 14px 8px;
       border-radius: 999px;
       color: #fff;
       background: var(--accent);
       box-shadow: 0 14px 30px rgba(218, 119, 86, .32);
-      writing-mode: vertical-rl;
       line-height: 1.15;
       letter-spacing: 0;
       transform: translateY(-50%);
+    }
+
+    .history-fab-label {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      line-height: 1;
+    }
+
+    .history-fab-label span {
+      display: block;
     }
 
     .history-fab:hover:not(:disabled),
@@ -901,7 +916,14 @@
   </main>
 
   <button class="history-fab" id="history-btn" type="button" aria-controls="history-modal" aria-expanded="false"
-    aria-label="打开测速记录">测速记录</button>
+    aria-label="打开测速记录">
+    <span class="history-fab-label" aria-hidden="true">
+      <span>测</span>
+      <span>速</span>
+      <span>记</span>
+      <span>录</span>
+    </span>
+  </button>
 
   <div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title"
     aria-hidden="true" tabindex="-1">

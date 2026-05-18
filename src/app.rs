@@ -572,6 +572,66 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_lock_history_fab_visual_width_with_border_box() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                ".history-fab {\n      position: fixed;\n      right: 20px;\n      top: 65%;"
+            ),
+            "测试应定位到测速记录浮动按钮样式"
+        );
+        assert!(
+            html.contains("      width: 48px;\n      min-width: 48px;\n      max-width: 48px;"),
+            "测速记录浮动按钮应使用固定视觉宽度，避免不同手机字体度量撑宽"
+        );
+        assert!(
+            html.contains("      box-sizing: border-box;"),
+            "固定宽度应包含内边距"
+        );
+        assert!(
+            html.contains("      padding: 14px 8px;"),
+            "固定宽度后应收窄横向内边距，保留舒适触控面积"
+        );
+        assert!(
+            !html.contains("      min-width: 46px;\n      min-height: 118px;\n      padding: 14px 10px;"),
+            "不应继续用内容最小宽度叠加 padding 的方式决定视觉宽度"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_stack_history_fab_label_without_writing_mode() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("<span class=\"history-fab-label\" aria-hidden=\"true\">")
+                && html.contains("<span>测</span>")
+                && html.contains("<span>速</span>")
+                && html.contains("<span>记</span>")
+                && html.contains("<span>录</span>"),
+            "测速记录浮动按钮应使用显式逐字堆叠的视觉标签"
+        );
+        assert!(
+            html.contains(".history-fab-label {\n      display: inline-flex;\n      flex-direction: column;"),
+            "逐字标签应通过 flex 纵向排列，避免依赖 writing-mode"
+        );
+        assert!(
+            html.contains(".history-fab-label span {\n      display: block;\n    }"),
+            "每个中文字应作为独立块级单元参与布局"
+        );
+        assert!(
+            html.contains("aria-label=\"打开测速记录\"")
+                && html.contains("aria-hidden=\"true\""),
+            "视觉逐字标签应对读屏隐藏，由按钮 aria-label 提供完整语义"
+        );
+        assert!(
+            !html.contains("writing-mode: vertical-rl;")
+                && !html.contains(">测速记录</button>"),
+            "不应继续依赖原生 button 文本的 writing-mode 竖排"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_center_history_close_button_and_add_press_motion() {
         let html = super::embedded_index_html();
 
