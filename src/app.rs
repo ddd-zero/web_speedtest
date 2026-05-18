@@ -569,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_keep_compact_target_rows_single_line() {
+    fn embedded_index_html_should_keep_compact_target_rows_stable_at_breakpoint() {
         let html = super::embedded_index_html();
 
         assert!(
@@ -582,7 +582,7 @@ mod tests {
         );
         assert!(
             html.contains("@media (max-width: 640px)"),
-            "640px 是顶部说明开始换行的位置，应直接切到手机单列布局"
+            "640px 是顶部说明开始换行的位置，应切到手机紧凑布局"
         );
         assert!(
             html.contains("target-host-text"),
@@ -591,6 +591,128 @@ mod tests {
         assert!(
             html.contains("text-overflow: ellipsis"),
             "紧凑列表中的长主机名应省略显示，避免撑高行内容"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_use_two_row_target_cards_on_small_screens() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("class=\"target-main\""),
+            "测速卡片应给线路信息区独立类名，便于窄屏布局精确控制"
+        );
+        assert!(
+            html.contains(
+                ".target-row {\n        grid-template-columns: minmax(0, 1fr) minmax(82px, .8fr) 86px;\n        gap: 6px 8px;\n        align-items: stretch;\n        padding: 8px;"
+            ),
+            "640px 以下测速卡片应压缩为两行：线路信息一行，延迟/下载/操作一行"
+        );
+        assert!(
+            html.contains(".target-main {\n        grid-column: 1 / -1;"),
+            "线路信息区应横跨整行，给长域名保留完整可省略空间"
+        );
+        assert!(
+            html.contains(
+                ".target-main {\n        grid-column: 1 / -1;\n        display: grid;\n        grid-template-columns: minmax(0, 1fr) minmax(0, max-content);"
+            ),
+            "窄屏线路信息区应把 CNAME 放到线路名同一行并按内容自适应右对齐"
+        );
+        assert!(
+            html.contains(
+                ".target-cname {\n        grid-column: 2;\n        grid-row: 1;\n        justify-self: end;"
+            ),
+            "窄屏 CNAME 应位于线路名右侧"
+        );
+        assert!(
+            html.contains("max-width: min(34vw, 168px);") && html.contains("font-size: .58rem;"),
+            "窄屏 CNAME 应进一步缩小字号和最大宽度，节省水平空间"
+        );
+        assert!(
+            html.contains(".target-host-text {\n        grid-column: 1;\n        grid-row: 2;"),
+            "窄屏主域名文本应留在左列，避免和右侧 CNAME 或节点徽标重叠"
+        );
+        assert!(
+            html.contains(
+                ".target-row button {\n        min-height: 38px;\n        padding: 8px 10px;"
+            ),
+            "窄屏操作按钮应降低高度但保留基本触控面积"
+        );
+        assert!(
+            html.contains(".target-main {\n        grid-column: 1 / -1;\n        display: grid;")
+                && html.contains("gap: 2px 8px;")
+                && html.contains(
+                    ".target-host {\n        display: contents;\n        font-size: .72rem;"
+                ),
+            "窄屏域名辅助信息应收紧间距和字号"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_render_cname_without_visual_prefix_and_with_more_room() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                ".target-host {\n      display: grid;\n      grid-template-columns: max-content minmax(0, max-content) minmax(0, 1fr) max-content;"
+            ),
+            "桌面端域名行应优先给主域名完整宽度，CNAME 自适应，地区固定在右侧"
+        );
+        assert!(
+            html.contains("max-width: min(32ch, 100%);")
+                && html.contains("justify-self: start;")
+                && !html.contains("flex: 0 1 240px;")
+                && !html.contains("max-width: 240px;"),
+            "桌面端 CNAME 应按内容自适应，不应继续占固定长槽"
+        );
+        assert!(
+            html.contains(
+                "return `<span class=\"target-cname\" title=\"${escapeHtml(displayCname)}\" aria-label=\"CNAME ${escapeHtml(displayCname)}\">${escapeHtml(displayCname)}</span>`;"
+            ),
+            "CNAME 徽标视觉文本应只显示域名本身"
+        );
+        assert!(
+            !html.contains(">CNAME ${escapeHtml(displayCname)}</span>"),
+            "CNAME 徽标不应继续在视觉文本前显示 CNAME 前缀"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_not_privacy_mask_cname_badges() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("const displayCname = cleanText(cname);"),
+            "CNAME 只用于辅助诊断展示，不应复用主域名隐私脱敏函数"
+        );
+        assert!(
+            !html.contains("const displayCname = formatTargetHostForDisplay(cname);"),
+            "CNAME 不应在隐私模式下被 maskDomainForPrivacy 处理"
+        );
+        assert!(
+            html.contains("${renderCnameBadge(target.cname)}"),
+            "测速列表仍应渲染 CNAME 徽标"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_keep_colo_badge_right_aligned_without_stretching() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".target-host-text {\n      grid-column: 1;\n      max-width: 100%;"),
+            "主域名应固定在域名行第一列，避免被 CNAME 或地区抢占优先级"
+        );
+        assert!(
+            html.contains(".target-cname {\n      display: inline-flex;")
+                && html.contains("grid-column: 2;"),
+            "CNAME 应固定在主域名之后的自适应列"
+        );
+        assert!(
+            html.contains(".target-colo {\n      grid-column: 4;")
+                && html.contains("justify-self: end;")
+                && html.contains("width: max-content;"),
+            "地区徽标应固定在右侧内容宽度列，不能被拉伸或跟随主域名"
         );
     }
 

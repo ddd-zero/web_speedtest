@@ -407,8 +407,8 @@
     }
 
     .target-host {
-      display: flex;
-      flex-wrap: nowrap;
+      display: grid;
+      grid-template-columns: max-content minmax(0, max-content) minmax(0, 1fr) max-content;
       align-items: center;
       gap: 6px;
       margin-top: 4px;
@@ -420,12 +420,16 @@
     }
 
     .target-host-text {
-      flex: 1 1 auto;
+      grid-column: 1;
+      max-width: 100%;
     }
 
     .target-colo {
+      grid-column: 4;
       display: inline-flex;
       align-items: center;
+      justify-self: end;
+      width: max-content;
       border-radius: 999px;
       padding: 2px 7px;
       color: var(--colo-fg, #7a5546);
@@ -833,8 +837,10 @@
     .target-cname {
       display: inline-flex;
       align-items: center;
-      flex: 0 0 auto;
-      max-width: 180px;
+      grid-column: 2;
+      justify-self: start;
+      max-width: min(32ch, 100%);
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -867,18 +873,68 @@
       }
 
       .target-row {
-        grid-template-columns: 1fr;
-        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) minmax(82px, .8fr) 86px;
+        gap: 6px 8px;
         align-items: stretch;
+        padding: 8px;
+      }
+
+      .target-main {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+        gap: 2px 8px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .target-name {
+        grid-column: 1;
+        grid-row: 1;
+        gap: 6px;
+      }
+
+      .target-host {
+        display: contents;
+        font-size: .72rem;
+      }
+
+      .target-host-text {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      .target-cname {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+        max-width: min(34vw, 168px);
+        padding: 1px 6px;
+        font-size: .58rem;
+        line-height: 1.15;
+      }
+
+      .target-colo {
+        grid-column: 2;
+        grid-row: 2;
+        justify-self: end;
       }
 
       .metric strong,
       .download-metric strong {
-        font-size: .98rem;
+        font-size: .94rem;
+        line-height: 1.15;
+      }
+
+      .metric span,
+      .download-metric span {
+        font-size: .68rem;
+        line-height: 1.2;
       }
 
       .target-row button {
-        padding: 10px 12px;
+        min-height: 38px;
+        padding: 8px 10px;
       }
 
       .topbar {
@@ -930,7 +986,6 @@
       }
 
       .download-metric {
-        grid-column: auto;
         text-align: left;
       }
     }
@@ -1586,7 +1641,7 @@
         const progress = renderDownloadProgress(targetState);
         return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}" data-target-key="${escapeHtml(target.key)}">
           <div class="target-row-progress" style="width:${progress}%"></div>
-          <div>
+          <div class="target-main">
             <div class="target-name">
               <span class="target-label-text">${escapeHtml(formatTargetLabelForDisplay(target))}</span>
               ${isRecommended ? `<span class="badge">推荐</span>` : ""}
@@ -1627,8 +1682,8 @@
 
     function renderCnameBadge(cname) {
       if (!cname || cname === "-") return "";
-      const displayCname = formatTargetHostForDisplay(cname);
-      return `<span class="target-cname" title="CNAME ${escapeHtml(displayCname)}">CNAME ${escapeHtml(displayCname)}</span>`;
+      const displayCname = cleanText(cname);
+      return `<span class="target-cname" title="${escapeHtml(displayCname)}" aria-label="CNAME ${escapeHtml(displayCname)}">${escapeHtml(displayCname)}</span>`;
     }
 
     function colorForColo(colo) {
