@@ -147,7 +147,7 @@ fn resolve_config_path_from_env(mut read_env: impl FnMut(&str) -> Option<String>
         .unwrap_or_else(|| PathBuf::from("config.toml"))
 }
 
-async fn index() -> Html<&'static str> {
+async fn index() -> Html<String> {
     Html(embedded_index_html())
 }
 
@@ -159,8 +159,8 @@ async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
     })
 }
 
-pub fn embedded_index_html() -> &'static str {
-    include_str!("../frontend/index.html")
+pub fn embedded_index_html() -> String {
+    include_str!("../frontend/index.html").replace("__APP_VERSION__", env!("CARGO_PKG_VERSION"))
 }
 
 async fn save_result(
@@ -430,11 +430,38 @@ mod tests {
         assert!(html.contains("https_jitter_ms"));
         assert!(html.contains("download_mbps"));
         assert!(html.contains("renderHistoryNetwork(record)"));
-        assert!(html.contains("搜索域名 / IP / 位置 / 运营商 / 节点"));
+        assert!(html.contains("搜索历史 空格分隔 IP 位置 运营商 节点"));
         assert!(!html.contains("partial_download_mbps"));
         assert!(!html.contains("final_download_mbps"));
         assert!(!html.contains("https_latency_median_ms"));
         assert!(!html.contains("min ${stats.min_ms"));
+    }
+
+    #[test]
+    fn embedded_index_html_should_show_cargo_package_version_badge_near_title() {
+        let html = super::embedded_index_html();
+        let version = env!("CARGO_PKG_VERSION");
+
+        assert!(
+            html.contains("<h1>网络测速\n            <span class=\"version-badge\""),
+            "版本徽标应紧贴主标题显示"
+        );
+        assert!(
+            html.contains(&format!("aria-label=\"当前版本 {version}\"")),
+            "版本徽标应提供完整可访问语义"
+        );
+        assert!(
+            html.contains(&format!(">v{version}</span>")),
+            "版本徽标应显示 Cargo 包版本"
+        );
+        assert!(
+            html.contains(".version-badge {\n      display: inline-flex;"),
+            "版本徽标应使用轻量 pill 样式"
+        );
+        assert!(
+            !html.contains("__APP_VERSION__"),
+            "页面输出不应泄露版本占位符"
+        );
     }
 
     #[test]
@@ -756,6 +783,34 @@ mod tests {
         assert!(
             !html.contains(r#"onclick="startDownloadTest('${escapeHtml(target.key)}')""#),
             "开始测速按钮不应直接触发会立即重渲染列表的测速动作"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_submit_history_search_form_on_enter() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("<form class=\"history-toolbar\" id=\"history-form\">"),
+            "测速记录筛选区应使用表单语义，让输入框回车可以提交搜索"
+        );
+        assert!(
+            html.contains("<button class=\"btn-primary\" id=\"query-history-btn\" type=\"submit\">查询</button>"),
+            "查询按钮应作为表单提交按钮，和回车搜索复用同一逻辑"
+        );
+        assert!(
+            html.contains("historyForm: document.getElementById(\"history-form\"),"),
+            "脚本应缓存历史搜索表单元素"
+        );
+        assert!(
+            html.contains("els.historyForm.addEventListener(\"submit\", event => {")
+                && html.contains("event.preventDefault();")
+                && html.contains("loadHistory();"),
+            "历史搜索表单提交时应阻止页面刷新并执行搜索"
+        );
+        assert!(
+            !html.contains("els.queryHistoryBtn.addEventListener(\"click\", loadHistory);"),
+            "不应只依赖查询按钮 click，否则输入框回车不会搜索"
         );
     }
 

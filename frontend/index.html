@@ -68,10 +68,30 @@
     }
 
     h1 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
       margin: 0;
       font-size: 1.48rem;
       letter-spacing: 0;
       line-height: 1.25;
+    }
+
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 7px;
+      border: 1px solid rgba(218, 119, 86, .24);
+      border-radius: 999px;
+      color: var(--accent);
+      background: #fff4ed;
+      font-size: .72rem;
+      font-weight: 800;
+      line-height: 1.35;
+      letter-spacing: 0;
+      white-space: nowrap;
     }
 
     .subline {
@@ -585,6 +605,7 @@
     }
 
     .history-toolbar {
+      margin: 0;
       display: grid;
       grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto;
       padding: 14px 20px;
@@ -882,7 +903,9 @@
     <section class="card main-card">
       <div class="topbar">
         <div>
-          <h1>网络测速</h1>
+          <h1>网络测速
+            <span class="version-badge" aria-label="当前版本 __APP_VERSION__">v__APP_VERSION__</span>
+          </h1>
           <div class="subline">自动多轮检测 HTTPS 延迟，点击测试单线程下载测速。</div>
         </div>
         <div class="top-actions">
@@ -940,13 +963,13 @@
           </svg>
         </button>
       </div>
-      <div class="history-toolbar">
+      <form class="history-toolbar" id="history-form">
         <select id="history-domain" class="search-select">
           <option value="">全部域名</option>
         </select>
-        <input id="history-query" class="search-input" placeholder="搜索域名 / IP / 位置 / 运营商 / 节点">
-        <button class="btn-primary" id="query-history-btn" type="button">查询</button>
-      </div>
+        <input id="history-query" class="search-input" placeholder="搜索历史 空格分隔 IP 位置 运营商 节点">
+        <button class="btn-primary" id="query-history-btn" type="submit">查询</button>
+      </form>
       <div class="table-container">
         <table class="history-table">
           <colgroup>
@@ -1033,6 +1056,7 @@
       historyBtn: document.getElementById("history-btn"),
       historyModal: document.getElementById("history-modal"),
       closeHistoryBtn: document.getElementById("close-history-btn"),
+      historyForm: document.getElementById("history-form"),
       historyDomain: document.getElementById("history-domain"),
       historyQuery: document.getElementById("history-query"),
       queryHistoryBtn: document.getElementById("query-history-btn"),
@@ -1059,7 +1083,10 @@
     els.historyModal.addEventListener("click", event => {
       if (event.target === els.historyModal) toggleHistory(false);
     });
-    els.queryHistoryBtn.addEventListener("click", loadHistory);
+    els.historyForm.addEventListener("submit", event => {
+      event.preventDefault();
+      loadHistory();
+    });
     window.addEventListener("keydown", event => {
       if (event.key === "Escape" && state.isHistoryOpen) toggleHistory(false);
     });
