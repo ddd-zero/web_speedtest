@@ -35,6 +35,11 @@ show_domains = true
 # 外部 YAML 线路文件路径。该文件必须包含 domains 数组，每项至少提供 url。
 path = "config.yaml"
 
+# 可选：黑名单线路不会下发给前端测速；URL 可带或不带尾斜杠。
+blacklist = [
+  "https://x8.nginxlily.cyou",
+]
+
 # 可选：按 URL 覆盖外部 YAML 中已有线路的展示名称或 CNAME。
 # 如果 URL 不存在，则会作为新增线路追加；URL 必须以 http:// 或 https:// 开头。
 [[domains.overrides]]
