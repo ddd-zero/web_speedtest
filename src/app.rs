@@ -748,9 +748,11 @@ mod tests {
             "关闭域名显示时主页不应继续显示 CNAME"
         );
         assert!(
-            html.contains("els.historyDomain.disabled = true;")
-                && html.contains("els.historyDomain.innerHTML = `<option value=\"\">-</option>`;"),
-            "关闭域名显示时历史筛选下拉也不应露出域名"
+            html.contains("els.historyDomain.disabled = false;")
+                && html.contains("function historyDomainOptionLabel(target, index)")
+                && html.contains("const fallbackLabel = `线路 ${index + 1}`;")
+                && html.contains("return shouldShowDomains() ? `${label} / ${host}` : label;"),
+            "关闭域名显示时历史筛选下拉仍应保留线路名选择能力，但不能直接显示域名"
         );
     }
 
@@ -1341,6 +1343,14 @@ mod tests {
                 ".history-speed-sort-btn[aria-pressed=\"true\"] {\n      color: var(--accent);\n      background: #fff4ed;\n      border-color: rgba(218, 119, 86, .22);"
             ),
             "下载速度排序激活后应保持 hover 时的边框和底色，避免状态反馈只在鼠标悬停时出现"
+        );
+        assert!(
+            html.contains("@media (hover: hover)")
+                && html.contains(".history-speed-sort-btn:hover:not(:disabled)")
+                && !html.contains(
+                    ".history-speed-sort-btn:hover:not(:disabled),\n    .history-speed-sort-btn:active:not(:disabled)"
+                ),
+            "移动端关闭下载速度排序后不应被粘滞 hover 留住激活样式"
         );
     }
 

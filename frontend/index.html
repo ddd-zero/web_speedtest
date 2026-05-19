@@ -880,7 +880,6 @@
       white-space: nowrap;
     }
 
-    .history-speed-sort-btn:hover:not(:disabled),
     .history-speed-sort-btn:active:not(:disabled),
     .history-speed-sort-btn.click-feedback:not(:disabled) {
       color: var(--accent);
@@ -1128,6 +1127,12 @@
     }
 
     @media (hover: hover) {
+
+      .history-speed-sort-btn:hover:not(:disabled) {
+        color: var(--accent);
+        background: #fff4ed;
+        border-color: rgba(218, 119, 86, .22);
+      }
 
       .history-table tbody .history-record-row:hover,
       .history-table tbody .history-record-row:has(> td:hover) {
@@ -2319,15 +2324,21 @@
     }
 
     function renderHistoryDomainOptions() {
-      if (!shouldShowDomains()) {
-        els.historyDomain.disabled = true;
-        els.historyDomain.innerHTML = `<option value="">-</option>`;
-        return;
-      }
       els.historyDomain.disabled = false;
-      els.historyDomain.innerHTML = `<option value="">全部域名</option>` + state.targets
-        .map(target => `<option value="${escapeHtml(target.host)}">${escapeHtml(target.label)} / ${escapeHtml(target.host)}</option>`)
+      const defaultLabel = shouldShowDomains() ? "全部域名" : "全部线路";
+      els.historyDomain.innerHTML = `<option value="">${defaultLabel}</option>` + state.targets
+        .map((target, index) => `<option value="${escapeHtml(target.host)}">${escapeHtml(historyDomainOptionLabel(target, index))}</option>`)
         .join("");
+    }
+
+    function historyDomainOptionLabel(target, index) {
+      const host = cleanText(target?.host);
+      let label = cleanText(target?.label);
+      const fallbackLabel = `线路 ${index + 1}`;
+      if (!label || (!shouldShowDomains() && looksLikeDomainLabel(label, host))) {
+        label = fallbackLabel;
+      }
+      return shouldShowDomains() ? `${label} / ${host}` : label;
     }
 
     function historyTargetLabel(record) {
