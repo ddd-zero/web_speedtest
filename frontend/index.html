@@ -1051,7 +1051,7 @@
       --history-row-hover-bg: #fff4ed;
     }
 
-    .history-group-row.click-feedback {
+    .history-group-row:active {
       --history-row-bg: #fff4ed;
       --history-row-border: rgba(218, 119, 86, .22);
       --history-row-ring: rgba(218, 119, 86, .22);
@@ -1395,15 +1395,15 @@
       <div class="info-group">
         <div class="info-row">
           <span class="label">用户 IP</span>
-          <span class="value" id="client-ip">待检测</span>
+          <span class="value" id="client-ip">正在检测</span>
         </div>
         <div class="info-row">
           <span class="label">位置</span>
-          <span class="value" id="client-location">API 待接入</span>
+          <span class="value" id="client-location">正在检测</span>
         </div>
         <div class="info-row">
           <span class="label">运营商</span>
-          <span class="value" id="client-isp">API 待接入</span>
+          <span class="value" id="client-isp">正在检测</span>
         </div>
       </div>
 
@@ -1608,7 +1608,7 @@
       const row = target.closest("[data-history-group-row]");
       const groupKey = toggle?.dataset.historyGroupKey || row?.dataset.historyGroupKey;
       if (!groupKey || !row) return;
-      runAfterHistoryRowClickFeedback(row, () => toggleHistoryGroup(groupKey));
+      toggleHistoryGroup(groupKey);
     });
     window.addEventListener("keydown", event => {
       if (event.key === "Escape" && state.isHistoryOpen) toggleHistory(false);
@@ -2228,7 +2228,7 @@
             <strong class="target-speed-value">${formatNodeSpeed(targetState)}</strong>
             <span class="target-download-status">${escapeHtml(renderDownloadStatusText(targetState))}</span>
           </div>
-          <button class="btn-primary" type="button" onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
+          <button class="btn-primary" type="button" onclick="startDownloadTest('${escapeHtml(target.key)}')" ${disabled ? "disabled" : ""}>${buttonText}</button>
         </div>`;
       }).join("");
       els.targetList.innerHTML = header + rows;
@@ -2720,33 +2720,6 @@
         clickFeedbackTimers.delete(button);
       }, BUTTON_CLICK_FEEDBACK_MS);
       clickFeedbackTimers.set(button, timer);
-    }
-
-    function playHistoryRowClickFeedback(row) {
-      if (!(row instanceof HTMLTableRowElement)) return;
-      const activeTimer = clickFeedbackTimers.get(row);
-      if (activeTimer) window.clearTimeout(activeTimer);
-      row.classList.remove("click-feedback");
-      void row.offsetWidth;
-      row.classList.add("click-feedback");
-      const timer = window.setTimeout(() => {
-        row.classList.remove("click-feedback");
-        clickFeedbackTimers.delete(row);
-      }, BUTTON_CLICK_FEEDBACK_MS);
-      clickFeedbackTimers.set(row, timer);
-    }
-
-    function runAfterButtonClickFeedback(action) {
-      window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);
-    }
-
-    function runAfterHistoryRowClickFeedback(row, action) {
-      playHistoryRowClickFeedback(row);
-      window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);
-    }
-
-    function startDownloadTestAfterClick(targetKey) {
-      runAfterButtonClickFeedback(() => startDownloadTest(targetKey));
     }
 
     function toggleHistory(show) {

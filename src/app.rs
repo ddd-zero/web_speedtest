@@ -1071,22 +1071,19 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_delay_dynamic_download_button_action_for_click_feedback() {
+    fn embedded_index_html_should_start_dynamic_download_button_action_immediately() {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains(r#"onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')""#),
-            "动态渲染的开始测速按钮应先播放点击反馈，再触发测速动作"
+            html.contains(r#"onclick="startDownloadTest('${escapeHtml(target.key)}')""#),
+            "动态渲染的测速按钮应立即触发测速动作，避免开始和停止测速慢半拍"
         );
         assert!(
-            html.contains(
-                "function startDownloadTestAfterClick(targetKey) {\n      runAfterButtonClickFeedback(() => startDownloadTest(targetKey));\n    }"
-            ),
-            "开始测速的延迟包装应复用统一点击反馈时长"
-        );
-        assert!(
-            !html.contains(r#"onclick="startDownloadTest('${escapeHtml(target.key)}')""#),
-            "开始测速按钮不应直接触发会立即重渲染列表的测速动作"
+            !html.contains("function startDownloadTestAfterClick(targetKey)")
+                && !html.contains(
+                    r#"onclick="startDownloadTestAfterClick('${escapeHtml(target.key)}')""#
+                ),
+            "测速按钮不应再通过点击反馈定时器延迟真实动作"
         );
     }
 
@@ -1359,11 +1356,12 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("function runAfterHistoryRowClickFeedback(row, action)")
-                && html.contains("playHistoryRowClickFeedback(row);")
-                && html.contains("window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);")
-                && html.contains(".history-group-row.click-feedback {"),
-            "折叠行应使用独立的整行点击反馈，并延迟重渲染到反馈可见之后"
+            html.contains("toggleHistoryGroup(groupKey);")
+                && !html.contains("function runAfterHistoryRowClickFeedback(row, action)")
+                && !html.contains("playHistoryRowClickFeedback(row);")
+                && !html.contains(".history-group-row.click-feedback {")
+                && html.contains(".history-group-row:active {"),
+            "折叠行应立即展开或收起，按压反馈只能由 CSS 提供，不能用定时器阻塞渲染"
         );
         assert!(
             !html.contains(".history-group-row.click-feedback > td")
