@@ -1100,6 +1100,206 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_offer_memory_backed_history_group_and_speed_sort_controls() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("const HISTORY_COLLAPSE_STORAGE_KEY = \"web-speed-history-collapse\";")
+                && html.contains(
+                    "const HISTORY_SPEED_SORT_STORAGE_KEY = \"web-speed-history-speed-sort\";"
+                ),
+            "测速记录折叠和下载速度排序偏好应使用独立 localStorage key 记忆"
+        );
+        assert!(
+            html.contains(
+                "historyCollapseEnabled: readHistoryPreference(HISTORY_COLLAPSE_STORAGE_KEY),"
+            ) && html.contains(
+                "historySpeedSortEnabled: readHistoryPreference(HISTORY_SPEED_SORT_STORAGE_KEY),"
+            ),
+            "前端状态应从本地偏好恢复折叠和排序开关"
+        );
+        assert!(
+            html.contains(
+                "<button class=\"btn-secondary history-control-btn history-icon-btn\" id=\"history-collapse-toggle\" type=\"button\""
+            ) && html.contains(
+                "<button class=\"history-speed-sort-btn\" id=\"history-speed-sort-btn\" type=\"button\" aria-pressed=\"false\""
+            ),
+            "历史记录应提供折叠同 IP 按钮，并把下载速度表头设计成排序按钮"
+        );
+        assert!(
+            html.contains("els.historyCollapseToggle.addEventListener(\"click\", toggleHistoryCollapse);")
+                && html.contains(
+                    "els.historySpeedSortBtn.addEventListener(\"click\", toggleHistorySpeedSort);"
+                )
+                && html.contains(
+                    "writeHistoryPreference(HISTORY_COLLAPSE_STORAGE_KEY, state.historyCollapseEnabled);"
+                )
+                && html.contains(
+                    "writeHistoryPreference(HISTORY_SPEED_SORT_STORAGE_KEY, state.historySpeedSortEnabled);"
+                ),
+            "折叠和排序按钮应只切换前端状态、重新渲染当前查询结果，并记忆开关偏好"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_group_history_records_by_client_ip_and_sort_by_speed() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("historyRecords: [],")
+                && html.contains("expandedHistoryGroups: new Set(),")
+                && html.contains("state.historyRecords = records;")
+                && html.contains("renderHistory();"),
+            "查询返回的记录应只保存在当前页面内存中，后续折叠和排序复用这次查询结果"
+        );
+        assert!(
+            html.contains("function historyRowsForRender()")
+                && html.contains("function groupHistoryRecordsByClientIp(records)")
+                && html.contains("const key = historyClientGroupKey(record);")
+                && html.contains("bestRecord: bestHistoryRecord(groupRecords),"),
+            "折叠模式应按后端返回的脱敏 client_ip 分组，并用组内最快记录作为外层展示"
+        );
+        assert!(
+            html.contains("function sortHistoryRecordsBySpeed(records)")
+                && html.contains("function historyDownloadSpeed(record)")
+                && html.contains("return Number.isFinite(speed) ? speed : 0;")
+                && html.contains(
+                    "state.historySpeedSortEnabled ? sortHistoryGroupsBySpeed(groups) : groups;"
+                ),
+            "下载速度排序应复用同一套速度解析逻辑，并且在折叠模式下按组内最高速度排序"
+        );
+        assert!(
+            html.contains("data-history-group-toggle")
+                && html.contains("function toggleHistoryGroup(groupKey)")
+                && html.contains(
+                    "group.records.forEach(record => pushHistoryRow(record, { isChild: true }));"
+                ),
+            "折叠后的分组行应支持点击展开，并展示该 IP 下的全部测速记录"
+        );
+        assert!(
+            !html.contains("localStorage.setItem(\"historyRecords\"")
+                && !html.contains("localStorage.setItem(\"records\""),
+            "查询结果不能持久化到 localStorage，只允许记忆排序和折叠开关"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_render_icon_only_history_collapse_control() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("class=\"btn-secondary history-control-btn history-icon-btn\"")
+                && html.contains("aria-label=\"折叠同 IP\"")
+                && html.contains("class=\"history-collapse-icon\""),
+            "折叠同 IP 控制应使用固定尺寸图标按钮，避免文字变化导致宽度抖动"
+        );
+        assert!(
+            html.contains(
+                "els.historyCollapseToggle.setAttribute(\"aria-label\", historyCollapseLabel);"
+            ) && html.contains(
+                "els.historyCollapseToggle.setAttribute(\"title\", historyCollapseLabel);"
+            ),
+            "折叠按钮应通过可访问名称和 title 表达状态，而不是切换可见文字"
+        );
+        assert!(
+            !html.contains("els.historyCollapseToggle.textContent"),
+            "折叠按钮不应通过 textContent 在折叠/取消折叠之间切换文案"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_paint_history_rows_across_grid_gaps_and_keep_scrollbar_stable() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".table-container {\n      flex: 1;\n      overflow: auto;\n      scrollbar-gutter: stable;"),
+            "历史表格容器应预留滚动条槽位，避免展开后出现滚动条导致列宽重算抖动"
+        );
+        assert!(
+            html.contains(".history-table tbody .history-record-row::before")
+                && html.contains("grid-column: 1 / -1;")
+                && html.contains("grid-row: var(--history-row);")
+                && html.contains(".history-table tbody .history-record-row > td {\n      grid-row: var(--history-row);"),
+            "历史记录每行应绘制跨越所有列的底色层，覆盖列间空白，避免颜色断层"
+        );
+        assert!(
+            html.contains(".history-table tr > :nth-child(1) {\n      grid-column: 1;")
+                && html.contains(".history-table tr > :nth-child(5) {\n      grid-column: 5;"),
+            "历史表格在显式指定 grid-row 后，也必须固定每个单元格的 grid-column，避免自动流排到隐式列"
+        );
+        assert!(
+            html.contains(".history-child-row {\n      --history-row-bg: #f6f3ef;")
+                && html.contains(".history-group-row:hover {\n      --history-row-bg: #fff4ed;"),
+            "折叠展开后的明细行应使用灰底，分组摘要行 hover 应整行反馈"
+        );
+        assert!(
+            html.contains("style=\"--history-row:${options.rowIndex};\""),
+            "渲染历史记录时应给每一行写入稳定 grid 行号，供整行底色层覆盖列间空白"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_measure_all_history_records_before_collapsed_expansion() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("${renderHistoryMeasureRow()}${historyRowsForRender().join(\"\")}")
+                && html.contains("function renderHistoryMeasureRow()"),
+            "折叠状态也应插入零高度测量行，让所有查询结果提前参与列宽计算"
+        );
+        assert!(
+            html.contains("class=\"history-record-row history-measure-row\"")
+                && html.contains("style=\"--history-row:2;\"")
+                && html.contains("aria-hidden=\"true\""),
+            "测量行应固定在第 2 个 grid 行，并对辅助技术隐藏"
+        );
+        assert!(
+            html.contains(".history-measure-row > td {\n      min-height: 0;")
+                && html
+                    .contains(".history-measure-stack {\n      display: grid;\n      height: 0;"),
+            "测量行应只贡献列宽，不增加可见行高"
+        );
+        assert!(
+            html.contains("{ ...options, rowIndex: rows.length + 3 }"),
+            "真实数据行应从测量行之后开始编号，避免和测量行重叠"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_expand_collapsed_history_group_from_entire_row() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("data-history-group-row")
+                && html.contains("data-history-group-key=\"${escapeHtml(options.group.key)}\""),
+            "折叠分组摘要行本身应携带分组 key，让整行都可以点击展开"
+        );
+        assert!(
+            html.contains("const row = target.closest(\"[data-history-group-row]\");")
+                && html.contains(
+                    "const groupKey = toggle?.dataset.historyGroupKey || row?.dataset.historyGroupKey;"
+                ),
+            "历史记录点击处理应同时识别时间按钮和整行点击"
+        );
+        assert!(
+            html.contains(".history-group-row td {\n      cursor: pointer;"),
+            "折叠分组摘要行应通过整行指针样式表达可点击"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_keep_active_speed_sort_button_frame_visible() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                ".history-speed-sort-btn[aria-pressed=\"true\"] {\n      color: var(--accent);\n      background: #fff4ed;\n      border-color: rgba(218, 119, 86, .22);"
+            ),
+            "下载速度排序激活后应保持 hover 时的边框和底色，避免状态反馈只在鼠标悬停时出现"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_keep_history_row_height_and_time_stable() {
         let html = super::embedded_index_html();
 
@@ -1113,7 +1313,10 @@ mod tests {
         );
         assert!(
             html.contains("<th class=\"col-time\">时间</th>")
-                && html.contains("<td class=\"col-time\">${formatTime(record.created_at)}</td>")
+                && html.contains(
+                    "<td class=\"col-time\">${renderHistoryTimeCell(record, options)}</td>"
+                )
+                && html.contains("if (!options.group) return formatTime(record.created_at);")
                 && html.contains(".col-time {\n      font-family: var(--mono-stack);\n      white-space: nowrap;\n    }"),
             "历史记录时间列应有语义 class 并禁止换行"
         );
@@ -1153,8 +1356,10 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("const isp = cleanText(record.ip_isp);")
-                && html.contains("const networkText = location && isp ? `${location} · ${isp}` : location || isp;")
+            html.contains("function historyNetworkText(record)")
+                && html.contains("const isp = cleanText(record.ip_isp);")
+                && html
+                    .contains("return location && isp ? `${location} · ${isp}` : location || isp;")
                 && html.contains("<span class=\"history-network-meta\">")
                 && html.contains("${renderHistoryColoBadge(record)}")
                 && html.contains("function renderHistoryColoBadge(record)")
@@ -1237,7 +1442,9 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto;"),
+            html.contains(
+                "grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto auto;"
+            ),
             "历史筛选栏应限制域名下拉框宽度，让搜索框承接剩余空间"
         );
         assert!(

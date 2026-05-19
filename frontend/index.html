@@ -658,9 +658,34 @@
     .history-toolbar {
       margin: 0;
       display: grid;
-      grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto;
+      grid-template-columns: minmax(150px, 240px) minmax(220px, 1fr) auto auto;
       padding: 14px 20px;
       background: #fbfaf8;
+    }
+
+    .history-control-btn {
+      white-space: nowrap;
+    }
+
+    .history-icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      padding: 0;
+    }
+
+    .history-collapse-icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    .history-control-btn[aria-pressed="true"] {
+      color: var(--accent);
+      background: #fff4ed;
+      border-color: rgba(218, 119, 86, .38);
+      box-shadow: 0 8px 18px rgba(218, 119, 86, .12);
     }
 
     .search-input,
@@ -697,6 +722,7 @@
     .table-container {
       flex: 1;
       overflow: auto;
+      scrollbar-gutter: stable;
       background: #fff;
     }
 
@@ -714,6 +740,7 @@
       display: grid;
       grid-template-columns: var(--history-grid-columns);
       justify-content: space-between;
+      background: #fffdf9;
       border-collapse: separate;
       border-spacing: 0;
     }
@@ -722,6 +749,30 @@
     .history-table tbody,
     .history-table tr {
       display: contents;
+    }
+
+    .history-table tr > :nth-child(1) {
+      grid-column: 1;
+    }
+
+    .history-table tr > :nth-child(2) {
+      grid-column: 2;
+    }
+
+    .history-table tr > :nth-child(3) {
+      grid-column: 3;
+    }
+
+    .history-table tr > :nth-child(4) {
+      grid-column: 4;
+    }
+
+    .history-table tr > :nth-child(5) {
+      grid-column: 5;
+    }
+
+    .history-table thead tr > th {
+      grid-row: 1;
     }
 
     th {
@@ -790,6 +841,52 @@
     .history-table .col-speed,
     .history-table .col-speed-header {
       justify-content: flex-end;
+    }
+
+    .history-speed-sort-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      margin: -3px -4px;
+      padding: 3px 4px;
+      border-radius: 8px;
+      color: inherit;
+      background: transparent;
+      border: 1px solid transparent;
+      box-shadow: none;
+      font: inherit;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .history-speed-sort-btn:hover:not(:disabled),
+    .history-speed-sort-btn:active:not(:disabled),
+    .history-speed-sort-btn.click-feedback:not(:disabled) {
+      color: var(--accent);
+      background: #fff4ed;
+      border-color: rgba(218, 119, 86, .22);
+    }
+
+    .history-speed-sort-btn[aria-pressed="true"] {
+      color: var(--accent);
+      background: #fff4ed;
+      border-color: rgba(218, 119, 86, .22);
+    }
+
+    .history-sort-mark {
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 6px solid currentColor;
+      opacity: .36;
+      transition: opacity .16s ease, transform .16s ease;
+    }
+
+    .history-speed-sort-btn[aria-pressed="true"] .history-sort-mark {
+      opacity: 1;
+      transform: translateY(1px);
     }
 
     .col-latency {
@@ -879,6 +976,128 @@
       color: var(--text-sub);
       font-family: var(--mono-stack);
       font-size: .76rem;
+    }
+
+    .history-record-row {
+      --history-row-bg: #fff;
+      --history-row-hover-bg: #fffdf9;
+    }
+
+    .history-table tbody .history-record-row::before {
+      content: "";
+      grid-column: 1 / -1;
+      grid-row: var(--history-row);
+      align-self: stretch;
+      background: var(--history-row-bg);
+      border-bottom: 1px solid #f3f0ec;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .history-table tbody .history-record-row:hover {
+      --history-row-bg: var(--history-row-hover-bg);
+    }
+
+    .history-table tbody .history-record-row > td {
+      grid-row: var(--history-row);
+      position: relative;
+      z-index: 1;
+      background: transparent;
+      border-bottom: none;
+    }
+
+    .history-table tbody .history-measure-row::before {
+      display: none;
+    }
+
+    .history-table tbody .history-measure-row > td {
+      min-height: 0;
+      height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+      overflow: hidden;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .history-measure-stack {
+      display: grid;
+      height: 0;
+      overflow: hidden;
+      gap: 0;
+      white-space: nowrap;
+    }
+
+    .history-group-row {
+      --history-row-hover-bg: #fff4ed;
+    }
+
+    .history-group-row:hover {
+      --history-row-bg: #fff4ed;
+    }
+
+    .history-group-row td {
+      cursor: pointer;
+    }
+
+    .history-group-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: -3px 0;
+      padding: 4px 6px;
+      border-radius: 8px;
+      color: #3f342e;
+      background: transparent;
+      border: 1px solid transparent;
+      box-shadow: none;
+      font-family: var(--mono-stack);
+      font-size: .78rem;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .history-group-toggle:hover:not(:disabled),
+    .history-group-toggle:active:not(:disabled),
+    .history-group-toggle.click-feedback:not(:disabled) {
+      color: var(--accent);
+      background: #fff4ed;
+      border-color: rgba(218, 119, 86, .22);
+    }
+
+    .history-group-arrow {
+      display: inline-block;
+      color: var(--accent);
+      transition: transform .16s ease;
+    }
+
+    .history-group-toggle[aria-expanded="true"] .history-group-arrow {
+      transform: rotate(90deg);
+    }
+
+    .history-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      color: var(--accent);
+      background: #fff0e8;
+      font-family: var(--font-stack);
+      font-size: .68rem;
+      font-weight: 800;
+    }
+
+    .history-child-row {
+      --history-row-bg: #f6f3ef;
+      --history-row-hover-bg: #f1ece6;
+    }
+
+    .history-child-row .col-time {
+      color: var(--text-sub);
     }
 
     .target-cname {
@@ -1028,6 +1247,16 @@
         padding: 12px;
       }
 
+      .history-toolbar button {
+        width: 100%;
+      }
+
+      .history-toolbar .history-icon-btn {
+        width: 42px;
+        min-width: 42px;
+        justify-self: start;
+      }
+
       table {
         min-width: 680px;
       }
@@ -1151,6 +1380,15 @@
         </select>
         <input id="history-query" class="search-input" placeholder="搜索历史 空格分隔 IP 位置 运营商 节点">
         <button class="btn-primary" id="query-history-btn" type="submit">查询</button>
+        <button class="btn-secondary history-control-btn history-icon-btn" id="history-collapse-toggle" type="button"
+          aria-pressed="false" aria-label="折叠同 IP" title="折叠同 IP">
+          <svg class="history-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="8" y="3.5" width="10" height="13" rx="2"></rect>
+            <rect x="5" y="6.5" width="10" height="13" rx="2"></rect>
+            <rect x="2" y="9.5" width="10" height="11" rx="2"></rect>
+          </svg>
+        </button>
       </form>
       <div class="table-container">
         <table class="history-table">
@@ -1159,7 +1397,12 @@
               <th class="col-time">时间</th>
               <th class="col-domain">域名</th>
               <th class="col-latency">HTTPS</th>
-              <th class="col-speed-header">下载速度</th>
+              <th class="col-speed-header" aria-sort="none">
+                <button class="history-speed-sort-btn" id="history-speed-sort-btn" type="button" aria-pressed="false" aria-label="按下载速度从高到低排序">
+                  <span>下载速度</span>
+                  <span class="history-sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
               <th class="col-network">访问来源</th>
             </tr>
           </thead>
@@ -1176,6 +1419,8 @@
     const ONE_CLICK_DOWNLOAD_TEST_MS = 6000;
     const HISTORY_CLOSE_ANIMATION_MS = 220;
     const BUTTON_CLICK_FEEDBACK_MS = 160;
+    const HISTORY_COLLAPSE_STORAGE_KEY = "web-speed-history-collapse";
+    const HISTORY_SPEED_SORT_STORAGE_KEY = "web-speed-history-speed-sort";
     const COLO_PALETTE = [
       { bg: "#eaf2ff", fg: "#205c9d", ring: "#c8ddfa" },
       { bg: "#e7f6f0", fg: "#1d6f57", ring: "#bfe7d7" },
@@ -1205,6 +1450,10 @@
         default_limit: 80,
         max_limit: 200,
       },
+      historyRecords: [],
+      historyCollapseEnabled: readHistoryPreference(HISTORY_COLLAPSE_STORAGE_KEY),
+      historySpeedSortEnabled: readHistoryPreference(HISTORY_SPEED_SORT_STORAGE_KEY),
+      expandedHistoryGroups: new Set(),
       display: {
         show_domains: true,
       },
@@ -1240,6 +1489,8 @@
       historyDomain: document.getElementById("history-domain"),
       historyQuery: document.getElementById("history-query"),
       queryHistoryBtn: document.getElementById("query-history-btn"),
+      historyCollapseToggle: document.getElementById("history-collapse-toggle"),
+      historySpeedSortBtn: document.getElementById("history-speed-sort-btn"),
       historyBody: document.getElementById("history-body"),
       clientIp: document.getElementById("client-ip"),
       clientLocation: document.getElementById("client-location"),
@@ -1268,6 +1519,17 @@
       event.preventDefault();
       loadHistory();
     });
+    els.historyCollapseToggle.addEventListener("click", toggleHistoryCollapse);
+    els.historySpeedSortBtn.addEventListener("click", toggleHistorySpeedSort);
+    els.historyBody.addEventListener("click", event => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const toggle = target.closest("[data-history-group-toggle]");
+      const row = target.closest("[data-history-group-row]");
+      const groupKey = toggle?.dataset.historyGroupKey || row?.dataset.historyGroupKey;
+      if (!groupKey) return;
+      toggleHistoryGroup(groupKey);
+    });
     window.addEventListener("keydown", event => {
       if (event.key === "Escape" && state.isHistoryOpen) toggleHistory(false);
     });
@@ -1281,6 +1543,7 @@
     }
 
     async function init() {
+      syncHistoryPresentationControls();
       await Promise.all([loadConfig(), loadClientInfo()]);
       runLatencyRounds({ discardFirstRound: true });
     }
@@ -1654,28 +1917,197 @@
         const response = await fetch(`/api/results?${params.toString()}`, { cache: "no-store" });
         if (!response.ok) throw new Error("记录加载失败");
         const records = await response.json();
-        if (!records.length) {
-          els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="5">暂无记录</td></tr>`;
-          return;
-        }
-        els.historyBody.innerHTML = records.map(record => {
-          const speed = record.download_mbps ?? 0;
-          return `<tr>
-            <td class="col-time">${formatTime(record.created_at)}</td>
-            <td class="col-domain">
-              <div class="history-domain-cell">
-                <span class="history-domain-label">${escapeHtml(historyTargetLabel(record))}</span>
-                <span class="history-domain-host">${escapeHtml(historyTargetHost(record))}</span>
-              </div>
-            </td>
-            <td class="col-latency">${renderHistoryLatency(record)}</td>
-            <td class="col-speed">${speed.toFixed(1)} Mbps</td>
-            <td class="col-network">${renderHistoryNetwork(record)}</td>
-          </tr>`;
-        }).join("");
+        state.historyRecords = records;
+        renderHistory();
       } catch (error) {
+        state.historyRecords = [];
         els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="5">${escapeHtml(error.message)}</td></tr>`;
       }
+    }
+
+    function renderHistory() {
+      syncHistoryPresentationControls();
+      if (!state.historyRecords.length) {
+        els.historyBody.innerHTML = `<tr><td class="empty-row" colspan="5">暂无记录</td></tr>`;
+        return;
+      }
+
+      els.historyBody.innerHTML = `${renderHistoryMeasureRow()}${historyRowsForRender().join("")}`;
+    }
+
+    function renderHistoryMeasureRow() {
+      const measureStack = values => `<div class="history-measure-stack">${values.map(value => `<span>${escapeHtml(value)}</span>`).join("")}</div>`;
+      return `<tr class="history-record-row history-measure-row" style="--history-row:2;" aria-hidden="true">
+        <td class="col-time">${measureStack(state.historyRecords.map(record => formatTime(record.created_at)))}</td>
+        <td class="col-domain">
+          <div class="history-domain-cell history-measure-stack">
+            ${state.historyRecords.map(record => `
+              <span class="history-domain-label">${escapeHtml(historyTargetLabel(record))}</span>
+              <span class="history-domain-host">${escapeHtml(historyTargetHost(record))}</span>
+            `).join("")}
+          </div>
+        </td>
+        <td class="col-latency">
+          <div class="history-latency-cell history-measure-stack">
+            ${state.historyRecords.map(record => `
+              <span class="history-latency-main">${formatLatency(record.https_latency_ms)}</span>
+              <span class="history-latency-jitter">抖动 ${formatLatency(record.https_jitter_ms)}</span>
+            `).join("")}
+          </div>
+        </td>
+        <td class="col-speed">${measureStack(state.historyRecords.map(record => `${historyDownloadSpeed(record).toFixed(1)} Mbps`))}</td>
+        <td class="col-network">
+          <div class="history-network-cell history-measure-stack">
+            ${state.historyRecords.map(record => `
+              <span class="history-network-ip">${escapeHtml(record.client_ip || "未知")}</span>
+              <span class="history-network-meta">
+                <span class="history-network-location">${escapeHtml(historyNetworkText(record) || "未知")}</span>
+                <span class="target-colo history-network-colo">${escapeHtml(cleanText(record.colo))}</span>
+              </span>
+            `).join("")}
+          </div>
+        </td>
+      </tr>`;
+    }
+
+    function historyRowsForRender() {
+      const rows = [];
+      const pushHistoryRow = (record, options = {}) => {
+        rows.push(renderHistoryRecordRow(record, { ...options, rowIndex: rows.length + 3 }));
+      };
+
+      if (!state.historyCollapseEnabled) {
+        sortHistoryRecordsBySpeed(state.historyRecords)
+          .forEach(record => pushHistoryRow(record));
+        return rows;
+      }
+
+      const groups = groupHistoryRecordsByClientIp(state.historyRecords);
+      const sortedGroups = state.historySpeedSortEnabled ? sortHistoryGroupsBySpeed(groups) : groups;
+      sortedGroups.forEach(group => {
+        if (group.records.length <= 1) {
+          pushHistoryRow(group.bestRecord);
+          return;
+        }
+
+        const expanded = state.expandedHistoryGroups.has(group.key);
+        pushHistoryRow(group.bestRecord, { group, expanded });
+        if (expanded) {
+          group.records.forEach(record => pushHistoryRow(record, { isChild: true }));
+        }
+      });
+      return rows;
+    }
+
+    function renderHistoryRecordRow(record, options = {}) {
+      const speed = historyDownloadSpeed(record);
+      const rowClasses = ["history-record-row"];
+      if (options.isChild) rowClasses.push("history-child-row");
+      if (options.group) rowClasses.push("history-group-row");
+      const groupAttrs = options.group ? ` data-history-group-row data-history-group-key="${escapeHtml(options.group.key)}" aria-expanded="${Boolean(options.expanded)}"` : "";
+      return `<tr class="${rowClasses.join(" ")}" style="--history-row:${options.rowIndex};"${groupAttrs}>
+        <td class="col-time">${renderHistoryTimeCell(record, options)}</td>
+        <td class="col-domain">
+          <div class="history-domain-cell">
+            <span class="history-domain-label">${escapeHtml(historyTargetLabel(record))}</span>
+            <span class="history-domain-host">${escapeHtml(historyTargetHost(record))}</span>
+          </div>
+        </td>
+        <td class="col-latency">${renderHistoryLatency(record)}</td>
+        <td class="col-speed">${speed.toFixed(1)} Mbps</td>
+        <td class="col-network">${renderHistoryNetwork(record)}</td>
+      </tr>`;
+    }
+
+    function renderHistoryTimeCell(record, options) {
+      if (!options.group) return formatTime(record.created_at);
+
+      const group = options.group;
+      const expanded = Boolean(options.expanded);
+      const label = expanded ? "收起" : "展开";
+      return `<button class="history-group-toggle" type="button" data-history-group-toggle data-history-group-key="${escapeHtml(group.key)}" aria-expanded="${expanded}" aria-label="${label} ${escapeHtml(group.key)} 的 ${group.records.length} 条测速记录">
+        <span class="history-group-arrow" aria-hidden="true">›</span>
+        <span>${formatTime(record.created_at)}</span>
+        <span class="history-group-count">${group.records.length}</span>
+      </button>`;
+    }
+
+    function groupHistoryRecordsByClientIp(records) {
+      const grouped = new Map();
+      records.forEach(record => {
+        const key = historyClientGroupKey(record);
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(record);
+      });
+
+      return Array.from(grouped.entries()).map(([key, groupRecords]) => ({
+        key,
+        records: sortHistoryRecordsBySpeed(groupRecords),
+        bestRecord: bestHistoryRecord(groupRecords),
+      }));
+    }
+
+    function bestHistoryRecord(records) {
+      return records.reduce((best, record) => (
+        historyDownloadSpeed(record) > historyDownloadSpeed(best) ? record : best
+      ), records[0]);
+    }
+
+    function sortHistoryRecordsBySpeed(records) {
+      if (!state.historySpeedSortEnabled) return [...records];
+      return records
+        .map((record, index) => ({ record, index }))
+        .sort((a, b) => historyDownloadSpeed(b.record) - historyDownloadSpeed(a.record) || a.index - b.index)
+        .map(item => item.record);
+    }
+
+    function sortHistoryGroupsBySpeed(groups) {
+      return groups
+        .map((group, index) => ({ group, index }))
+        .sort((a, b) => historyDownloadSpeed(b.group.bestRecord) - historyDownloadSpeed(a.group.bestRecord) || a.index - b.index)
+        .map(item => item.group);
+    }
+
+    function historyDownloadSpeed(record) {
+      const speed = Number(record?.download_mbps);
+      return Number.isFinite(speed) ? speed : 0;
+    }
+
+    function historyClientGroupKey(record) {
+      return cleanText(record?.client_ip) || "未知";
+    }
+
+    function toggleHistoryCollapse() {
+      state.historyCollapseEnabled = !state.historyCollapseEnabled;
+      if (!state.historyCollapseEnabled) state.expandedHistoryGroups.clear();
+      writeHistoryPreference(HISTORY_COLLAPSE_STORAGE_KEY, state.historyCollapseEnabled);
+      renderHistory();
+    }
+
+    function toggleHistorySpeedSort() {
+      state.historySpeedSortEnabled = !state.historySpeedSortEnabled;
+      writeHistoryPreference(HISTORY_SPEED_SORT_STORAGE_KEY, state.historySpeedSortEnabled);
+      renderHistory();
+    }
+
+    function toggleHistoryGroup(groupKey) {
+      if (!groupKey) return;
+      if (state.expandedHistoryGroups.has(groupKey)) {
+        state.expandedHistoryGroups.delete(groupKey);
+      } else {
+        state.expandedHistoryGroups.add(groupKey);
+      }
+      renderHistory();
+    }
+
+    function syncHistoryPresentationControls() {
+      const historyCollapseLabel = state.historyCollapseEnabled ? "取消折叠同 IP" : "折叠同 IP";
+      els.historyCollapseToggle.setAttribute("aria-pressed", String(state.historyCollapseEnabled));
+      els.historyCollapseToggle.setAttribute("aria-label", historyCollapseLabel);
+      els.historyCollapseToggle.setAttribute("title", historyCollapseLabel);
+      els.historySpeedSortBtn.setAttribute("aria-pressed", String(state.historySpeedSortEnabled));
+      els.historySpeedSortBtn.setAttribute("aria-label", state.historySpeedSortEnabled ? "取消下载速度排序" : "按下载速度从高到低排序");
+      els.historySpeedSortBtn.parentElement?.setAttribute("aria-sort", state.historySpeedSortEnabled ? "descending" : "none");
     }
 
     function renderTargetList() {
@@ -1854,12 +2286,7 @@
     }
 
     function renderHistoryNetwork(record) {
-      const location = [record.ip_country, record.ip_region, record.ip_city]
-        .map(cleanText)
-        .filter(Boolean)
-        .join(" ");
-      const isp = cleanText(record.ip_isp);
-      const networkText = location && isp ? `${location} · ${isp}` : location || isp;
+      const networkText = historyNetworkText(record);
       return `<div class="history-network-cell">
         <span class="history-network-ip">${escapeHtml(record.client_ip || "未知")}</span>
         <span class="history-network-meta">
@@ -1867,6 +2294,15 @@
           ${renderHistoryColoBadge(record)}
         </span>
       </div>`;
+    }
+
+    function historyNetworkText(record) {
+      const location = [record.ip_country, record.ip_region, record.ip_city]
+        .map(cleanText)
+        .filter(Boolean)
+        .join(" ");
+      const isp = cleanText(record.ip_isp);
+      return location && isp ? `${location} · ${isp}` : location || isp;
     }
 
     function renderHistoryColoBadge(record) {
@@ -2244,6 +2680,22 @@
         minute: "2-digit",
         second: "2-digit",
       });
+    }
+
+    function readHistoryPreference(key) {
+      try {
+        return window.localStorage.getItem(key) === "true";
+      } catch {
+        return false;
+      }
+    }
+
+    function writeHistoryPreference(key, value) {
+      try {
+        window.localStorage.setItem(key, String(Boolean(value)));
+      } catch {
+        // 浏览器禁用本地存储时，只保留当前页面内存状态。
+      }
     }
 
     function roundMetric(value) {
