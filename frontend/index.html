@@ -708,9 +708,12 @@
     }
 
     .history-table {
-      --history-grid-columns: 112px minmax(150px, 1fr) clamp(86px, 12vw, 118px) clamp(90px, 13vw, 126px) max-content;
+      --history-grid-columns: repeat(5, max-content);
+      width: max-content;
+      min-width: 100%;
       display: grid;
       grid-template-columns: var(--history-grid-columns);
+      justify-content: space-between;
       border-collapse: separate;
       border-spacing: 0;
     }

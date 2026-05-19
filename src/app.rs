@@ -1173,13 +1173,26 @@ mod tests {
 
         assert!(
             html.contains(
-                ".history-table {\n      --history-grid-columns: 112px minmax(150px, 1fr) clamp(86px, 12vw, 118px) clamp(90px, 13vw, 126px) max-content;"
+                ".history-table {\n      --history-grid-columns: repeat(5, max-content);"
             ),
-            "测速记录应使用明确的 grid 列轨道，让访问来源按内容完整显示并通过横向滚动承接超长内容"
+            "测速记录应让每列按内容宽度占位，避免内容较多的列被均分列宽挤压"
+        );
+        assert!(
+            html.contains("width: max-content;")
+                && html.contains("min-width: 100%;")
+                && html.contains("justify-content: space-between;"),
+            "历史表格应把空余宽度均分为列间距，并在内容总宽超过容器时横向滚动"
         );
         assert!(
             !html.contains("clamp(174px, 21vw, 200px)"),
             "访问来源列不应再设置固定上限，否则较长归属地仍会被省略"
+        );
+        assert!(
+            !html.contains("@media (min-width: 820px)")
+                && !html.contains("clamp(86px, 12vw, 118px)")
+                && !html.contains("clamp(90px, 13vw, 126px)")
+                && !html.contains("repeat(5, minmax(max-content, 1fr))"),
+            "历史记录列宽不应再使用断点或视口 clamp 切换，避免收窄时跳跃"
         );
         assert!(
             html.contains(
