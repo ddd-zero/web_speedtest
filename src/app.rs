@@ -1190,8 +1190,17 @@ mod tests {
         assert!(
             html.contains("class=\"btn-secondary history-control-btn history-icon-btn\"")
                 && html.contains("aria-label=\"折叠同 IP\"")
-                && html.contains("class=\"history-collapse-icon\""),
-            "折叠同 IP 控制应使用固定尺寸图标按钮，避免文字变化导致宽度抖动"
+                && html.contains("class=\"history-collapse-icon\"")
+                && html.contains(
+                    "<rect x=\"5\" y=\"4.5\" width=\"14\" height=\"3\" rx=\"1.3\"></rect>"
+                )
+                && html.contains(
+                    "<rect x=\"5\" y=\"10.5\" width=\"14\" height=\"3\" rx=\"1.3\"></rect>"
+                )
+                && html.contains(
+                    "<rect x=\"5\" y=\"16.5\" width=\"14\" height=\"3\" rx=\"1.3\"></rect>"
+                ),
+            "折叠同 IP 控制应使用固定尺寸的水平三层图标按钮，避免文字变化导致宽度抖动"
         );
         assert!(
             html.contains(
@@ -1228,8 +1237,13 @@ mod tests {
             "历史表格在显式指定 grid-row 后，也必须固定每个单元格的 grid-column，避免自动流排到隐式列"
         );
         assert!(
-            html.contains(".history-child-row {\n      --history-row-bg: #f6f3ef;")
-                && html.contains(".history-group-row:hover {\n      --history-row-bg: #fff4ed;"),
+            html.contains(".history-child-row {\n      --history-row-bg: #f3f4f6;")
+                && html.contains("--history-row-hover-bg: #eceff3;")
+                && html.contains(".history-group-row:hover,")
+                && html.contains(".history-group-row:has(> td:hover),")
+                && html.contains("--history-row-bg: #fff4ed;")
+                && html.contains("--history-row-ring: rgba(218, 119, 86, .22);")
+                && html.contains("--history-row-fg: var(--accent);"),
             "折叠展开后的明细行应使用灰底，分组摘要行 hover 应整行反馈"
         );
         assert!(
@@ -1285,6 +1299,14 @@ mod tests {
             html.contains(".history-group-row td {\n      cursor: pointer;"),
             "折叠分组摘要行应通过整行指针样式表达可点击"
         );
+        assert!(
+            html.contains(".history-group-row:hover .history-group-toggle")
+                && html.contains(".history-group-row:has(> td:hover) .history-group-toggle")
+                && html.contains(".history-group-row:hover > td")
+                && html.contains(".history-group-row:has(> td:hover) > td")
+                && !html.contains(".history-group-toggle:hover:not(:disabled),\n    .history-group-toggle:active:not(:disabled),\n    .history-group-toggle.click-feedback:not(:disabled) {\n      color: var(--accent);\n      background: #fff4ed;"),
+            "分组摘要 hover 样式应由整行提供，时间按钮不应再单独出现小块高亮"
+        );
     }
 
     #[test]
@@ -1296,6 +1318,25 @@ mod tests {
                 ".history-speed-sort-btn[aria-pressed=\"true\"] {\n      color: var(--accent);\n      background: #fff4ed;\n      border-color: rgba(218, 119, 86, .22);"
             ),
             "下载速度排序激活后应保持 hover 时的边框和底色，避免状态反馈只在鼠标悬停时出现"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_render_continuous_history_header_background_and_border() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".history-table::before {\n      content: \"\";")
+                && html.contains("grid-column: 1 / -1;")
+                && html.contains("grid-row: 1;")
+                && html.contains("border-bottom: 1px solid #eee7df;"),
+            "历史表头应使用跨列背景层绘制连续下边线，避免列间空白处边框断开"
+        );
+        assert!(
+            html.contains(".history-table thead tr > th {\n      grid-row: 1;\n      z-index: 2;")
+                && html.contains("th {\n      position: sticky;")
+                && html.contains("background: transparent;"),
+            "表头单元格应位于跨列背景层上方，自身不再单独绘制背景造成断层"
         );
     }
 

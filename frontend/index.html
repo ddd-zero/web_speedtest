@@ -745,6 +745,18 @@
       border-spacing: 0;
     }
 
+    .history-table::before {
+      content: "";
+      grid-column: 1 / -1;
+      grid-row: 1;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      align-self: stretch;
+      background: #fffdf9;
+      border-bottom: 1px solid #eee7df;
+    }
+
     .history-table thead,
     .history-table tbody,
     .history-table tr {
@@ -773,6 +785,7 @@
 
     .history-table thead tr > th {
       grid-row: 1;
+      z-index: 2;
     }
 
     th {
@@ -780,9 +793,9 @@
       top: 0;
       z-index: 1;
       padding: 12px 12px;
-      border-bottom: 1px solid #eee7df;
+      border-bottom: none;
       color: #888;
-      background: #fffdf9;
+      background: transparent;
       text-align: left;
       font-weight: 700;
       white-space: nowrap;
@@ -981,6 +994,9 @@
     .history-record-row {
       --history-row-bg: #fff;
       --history-row-hover-bg: #fffdf9;
+      --history-row-border: #f3f0ec;
+      --history-row-ring: transparent;
+      --history-row-fg: inherit;
     }
 
     .history-table tbody .history-record-row::before {
@@ -989,12 +1005,14 @@
       grid-row: var(--history-row);
       align-self: stretch;
       background: var(--history-row-bg);
-      border-bottom: 1px solid #f3f0ec;
+      border-bottom: 1px solid var(--history-row-border);
+      box-shadow: inset 0 0 0 1px var(--history-row-ring);
       pointer-events: none;
       z-index: 0;
     }
 
-    .history-table tbody .history-record-row:hover {
+    .history-table tbody .history-record-row:hover,
+    .history-table tbody .history-record-row:has(> td:hover) {
       --history-row-bg: var(--history-row-hover-bg);
     }
 
@@ -1033,12 +1051,26 @@
       --history-row-hover-bg: #fff4ed;
     }
 
-    .history-group-row:hover {
+    .history-group-row:hover,
+    .history-group-row:has(> td:hover),
+    .history-group-row:focus-within {
       --history-row-bg: #fff4ed;
+      --history-row-border: rgba(218, 119, 86, .22);
+      --history-row-ring: rgba(218, 119, 86, .22);
+      --history-row-fg: var(--accent);
     }
 
     .history-group-row td {
       cursor: pointer;
+    }
+
+    .history-group-row:hover > td,
+    .history-group-row:has(> td:hover) > td,
+    .history-group-row:focus-within > td,
+    .history-group-row:hover .history-group-toggle,
+    .history-group-row:has(> td:hover) .history-group-toggle,
+    .history-group-row:focus-within .history-group-toggle {
+      color: var(--history-row-fg);
     }
 
     .history-group-toggle {
@@ -1048,7 +1080,7 @@
       margin: -3px 0;
       padding: 4px 6px;
       border-radius: 8px;
-      color: #3f342e;
+      color: inherit;
       background: transparent;
       border: 1px solid transparent;
       box-shadow: none;
@@ -1061,9 +1093,10 @@
     .history-group-toggle:hover:not(:disabled),
     .history-group-toggle:active:not(:disabled),
     .history-group-toggle.click-feedback:not(:disabled) {
-      color: var(--accent);
-      background: #fff4ed;
-      border-color: rgba(218, 119, 86, .22);
+      color: inherit;
+      background: transparent;
+      border-color: transparent;
+      transform: none;
     }
 
     .history-group-arrow {
@@ -1092,8 +1125,8 @@
     }
 
     .history-child-row {
-      --history-row-bg: #f6f3ef;
-      --history-row-hover-bg: #f1ece6;
+      --history-row-bg: #f3f4f6;
+      --history-row-hover-bg: #eceff3;
     }
 
     .history-child-row .col-time {
@@ -1384,9 +1417,9 @@
           aria-pressed="false" aria-label="折叠同 IP" title="折叠同 IP">
           <svg class="history-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="8" y="3.5" width="10" height="13" rx="2"></rect>
-            <rect x="5" y="6.5" width="10" height="13" rx="2"></rect>
-            <rect x="2" y="9.5" width="10" height="11" rx="2"></rect>
+            <rect x="5" y="4.5" width="14" height="3" rx="1.3"></rect>
+            <rect x="5" y="10.5" width="14" height="3" rx="1.3"></rect>
+            <rect x="5" y="16.5" width="14" height="3" rx="1.3"></rect>
           </svg>
         </button>
       </form>
