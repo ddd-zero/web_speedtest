@@ -73,6 +73,8 @@ struct FileConfig {
 struct DomainConfig {
     path: Option<PathBuf>,
     #[serde(default)]
+    blacklist: Vec<String>,
+    #[serde(default)]
     overrides: Vec<DomainItem>,
 }
 
@@ -232,7 +234,8 @@ fn load_domain_items(config: &DomainConfig) -> Result<Vec<DomainItem>, ConfigErr
         return Err(ConfigError::NoDomains);
     }
 
-    merge_domain_overrides(external.domains, &config.overrides)
+    let domains = merge_domain_overrides(external.domains, &config.overrides)?;
+    filter_blacklisted_domains(domains, &config.blacklist)
 }
 
 fn merge_domain_overrides(
@@ -260,6 +263,29 @@ fn merge_domain_overrides(
     }
 
     Ok(domains)
+}
+
+fn filter_blacklisted_domains(
+    domains: Vec<DomainItem>,
+    blacklist: &[String],
+) -> Result<Vec<DomainItem>, ConfigError> {
+    if blacklist.is_empty() {
+        return Ok(domains);
+    }
+
+    let blacklist = blacklist
+        .iter()
+        .map(|url| normalize_base_url(url))
+        .collect::<Result<HashSet<_>, _>>()?;
+    let mut filtered_domains = Vec::with_capacity(domains.len());
+    for domain in domains {
+        // 黑名单按归一化后的 URL 比较，避免尾斜杠写法影响匹配结果。
+        if !blacklist.contains(&normalize_base_url(&domain.url)?) {
+            filtered_domains.push(domain);
+        }
+    }
+
+    Ok(filtered_domains)
 }
 
 fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
@@ -617,6 +643,44 @@ mod tests {
         assert_eq!(config.targets[2].label, "新增线路");
         assert_eq!(config.targets[2].host, "new.example.com");
         assert_eq!(config.targets[2].cname, "new.cname.example.com");
+    }
+
+    #[test]
+    fn runtime_config_should_filter_blacklisted_domains_ignoring_trailing_slash() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speedtest-blacklist-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "x8 无尾斜杠"
+                url: "https://x8.nginxlily.cyou"
+              - name: "x9 有尾斜杠"
+                url: "https://x9.nginxlily.cyou/"
+              - name: "保留线路"
+                url: "https://keep.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let config = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [domains]
+            path = '{}'
+            blacklist = [
+                "https://x8.nginxlily.cyou/",
+                "https://x9.nginxlily.cyou"
+            ]
+            "#,
+            yaml_path.display()
+        ))
+        .expect("config should parse");
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert_eq!(config.targets.len(), 1);
+        assert_eq!(config.targets[0].host, "keep.example.com");
     }
 
     #[test]
