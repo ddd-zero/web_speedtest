@@ -139,13 +139,17 @@
       transform: none;
     }
 
-    button:focus:not(:focus-visible) {
+    button:focus {
       outline: none;
     }
 
-    button:focus-visible {
+    body.keyboard-focus button:focus {
       outline: 3px solid rgba(218, 119, 86, .48);
       outline-offset: 3px;
+    }
+
+    body:not(.keyboard-focus) button:focus-visible {
+      outline: none;
     }
 
     button.click-feedback:not(:disabled) {
@@ -515,7 +519,7 @@
       transition: opacity .18s ease;
     }
 
-    .modal-overlay.closing {
+    .modal-overlay.is-leaving {
       opacity: 0;
       visibility: visible;
       pointer-events: none;
@@ -525,10 +529,13 @@
     .modal-overlay.active .modal-content {
       opacity: 1;
       transform: scale(1);
+    }
+
+    .modal-overlay.is-entering .modal-content {
       animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
     }
 
-    .modal-overlay.closing .modal-content {
+    .modal-overlay.is-leaving .modal-content {
       animation: popOut .2s cubic-bezier(.4, 0, .2, 1) both;
     }
 
@@ -996,7 +1003,6 @@
       --history-row-hover-bg: #fffdf9;
       --history-row-border: #f3f0ec;
       --history-row-ring: transparent;
-      --history-row-fg: inherit;
     }
 
     .history-table tbody .history-record-row::before {
@@ -1007,13 +1013,8 @@
       background: var(--history-row-bg);
       border-bottom: 1px solid var(--history-row-border);
       box-shadow: inset 0 0 0 1px var(--history-row-ring);
-      pointer-events: none;
+      pointer-events: auto;
       z-index: 0;
-    }
-
-    .history-table tbody .history-record-row:hover,
-    .history-table tbody .history-record-row:has(> td:hover) {
-      --history-row-bg: var(--history-row-hover-bg);
     }
 
     .history-table tbody .history-record-row > td {
@@ -1051,26 +1052,17 @@
       --history-row-hover-bg: #fff4ed;
     }
 
-    .history-group-row:hover,
-    .history-group-row:has(> td:hover),
-    .history-group-row:focus-within {
+    .history-group-row.click-feedback {
       --history-row-bg: #fff4ed;
       --history-row-border: rgba(218, 119, 86, .22);
       --history-row-ring: rgba(218, 119, 86, .22);
-      --history-row-fg: var(--accent);
     }
 
     .history-group-row td {
       cursor: pointer;
-    }
-
-    .history-group-row:hover > td,
-    .history-group-row:has(> td:hover) > td,
-    .history-group-row:focus-within > td,
-    .history-group-row:hover .history-group-toggle,
-    .history-group-row:has(> td:hover) .history-group-toggle,
-    .history-group-row:focus-within .history-group-toggle {
-      color: var(--history-row-fg);
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     .history-group-toggle {
@@ -1088,14 +1080,16 @@
       font-size: .78rem;
       line-height: 1.2;
       white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
-    .history-group-toggle:hover:not(:disabled),
-    .history-group-toggle:active:not(:disabled),
-    .history-group-toggle.click-feedback:not(:disabled) {
-      color: inherit;
-      background: transparent;
-      border-color: transparent;
+    button.history-group-toggle:hover:not(:disabled) {
+      transform: none;
+    }
+
+    button.history-group-toggle:active:not(:disabled) {
       transform: none;
     }
 
@@ -1131,6 +1125,21 @@
 
     .history-child-row .col-time {
       color: var(--text-sub);
+    }
+
+    @media (hover: hover) {
+
+      .history-table tbody .history-record-row:hover,
+      .history-table tbody .history-record-row:has(> td:hover) {
+        --history-row-bg: var(--history-row-hover-bg);
+      }
+
+      .history-group-row:hover,
+      .history-group-row:has(> td:hover) {
+        --history-row-bg: #fff4ed;
+        --history-row-border: rgba(218, 119, 86, .22);
+        --history-row-ring: rgba(218, 119, 86, .22);
+      }
     }
 
     .target-cname {
@@ -1276,8 +1285,22 @@
       }
 
       .history-toolbar {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) 42px;
+        gap: 8px;
         padding: 12px;
+      }
+
+      .history-toolbar .search-select,
+      .history-toolbar .search-input {
+        grid-column: 1 / -1;
+      }
+
+      #query-history-btn {
+        grid-column: 1;
+      }
+
+      #history-collapse-toggle {
+        grid-column: 2;
       }
 
       .history-toolbar button {
@@ -1287,7 +1310,7 @@
       .history-toolbar .history-icon-btn {
         width: 42px;
         min-width: 42px;
-        justify-self: start;
+        justify-self: end;
       }
 
       table {
@@ -1314,16 +1337,22 @@
         transition: none;
       }
 
-      .modal-overlay.active .modal-content {
+      .modal-overlay.is-entering .modal-content,
+      .modal-overlay.is-leaving .modal-content {
         animation: none;
+      }
+
+      .modal-overlay.active .modal-content {
         opacity: 1;
         transform: scale(1);
       }
 
-      .modal-overlay.closing .modal-content {
-        animation: none;
+      .modal-overlay.is-leaving .modal-content {
+        opacity: 0;
+        transform: scale(0.96);
       }
     }
+
   </style>
 </head>
 
@@ -1450,7 +1479,8 @@
     const IP_LOOKUP_URL = "https://myip.ipip.net/json";
     const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
     const ONE_CLICK_DOWNLOAD_TEST_MS = 6000;
-    const HISTORY_CLOSE_ANIMATION_MS = 220;
+    const HISTORY_OPEN_ANIMATION_MS = 300;
+    const HISTORY_CLOSE_ANIMATION_MS = 200;
     const BUTTON_CLICK_FEEDBACK_MS = 160;
     const HISTORY_COLLAPSE_STORAGE_KEY = "web-speed-history-collapse";
     const HISTORY_SPEED_SORT_STORAGE_KEY = "web-speed-history-speed-sort";
@@ -1469,7 +1499,7 @@
     ];
     const assignedColoColorIndexes = new Map();
     const clickFeedbackTimers = new WeakMap();
-    let historyCloseTimer = 0;
+    let historyAnimationTimer = 0;
 
     const state = {
       targets: [],
@@ -1532,19 +1562,31 @@
 
     window.addEventListener("DOMContentLoaded", init);
 
+    document.addEventListener("keydown", event => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      document.body.classList.toggle("keyboard-focus", true);
+    }, true);
+
+    ["pointerdown", "mousedown", "touchstart"].forEach(eventName => {
+      document.addEventListener(eventName, () => {
+        document.body.classList.toggle("keyboard-focus", false);
+      }, true);
+    });
+
     document.addEventListener("click", event => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const button = target.closest("button");
       if (!button) return;
+      if (button.matches("[data-history-group-toggle]")) return;
       playButtonClickFeedback(button);
     }, true);
 
     els.oneClickDownloadBtn.addEventListener("click", runOneClickDownloadSequence);
     els.refreshLatencyBtn.addEventListener("click", () => runLatencyRounds());
     els.privacyBtn.addEventListener("click", togglePrivacyMode);
-    els.historyBtn.addEventListener("click", () => runAfterButtonClickFeedback(openHistory));
-    els.closeHistoryBtn.addEventListener("click", () => runAfterButtonClickFeedback(() => toggleHistory(false)));
+    els.historyBtn.addEventListener("click", openHistory);
+    els.closeHistoryBtn.addEventListener("click", () => toggleHistory(false));
     els.historyModal.addEventListener("click", event => {
       if (event.target === els.historyModal) toggleHistory(false);
     });
@@ -1560,8 +1602,8 @@
       const toggle = target.closest("[data-history-group-toggle]");
       const row = target.closest("[data-history-group-row]");
       const groupKey = toggle?.dataset.historyGroupKey || row?.dataset.historyGroupKey;
-      if (!groupKey) return;
-      toggleHistoryGroup(groupKey);
+      if (!groupKey || !row) return;
+      runAfterHistoryRowClickFeedback(row, () => toggleHistoryGroup(groupKey));
     });
     window.addEventListener("keydown", event => {
       if (event.key === "Escape" && state.isHistoryOpen) toggleHistory(false);
@@ -2669,7 +2711,26 @@
       clickFeedbackTimers.set(button, timer);
     }
 
+    function playHistoryRowClickFeedback(row) {
+      if (!(row instanceof HTMLTableRowElement)) return;
+      const activeTimer = clickFeedbackTimers.get(row);
+      if (activeTimer) window.clearTimeout(activeTimer);
+      row.classList.remove("click-feedback");
+      void row.offsetWidth;
+      row.classList.add("click-feedback");
+      const timer = window.setTimeout(() => {
+        row.classList.remove("click-feedback");
+        clickFeedbackTimers.delete(row);
+      }, BUTTON_CLICK_FEEDBACK_MS);
+      clickFeedbackTimers.set(row, timer);
+    }
+
     function runAfterButtonClickFeedback(action) {
+      window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);
+    }
+
+    function runAfterHistoryRowClickFeedback(row, action) {
+      playHistoryRowClickFeedback(row);
       window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);
     }
 
@@ -2678,25 +2739,36 @@
     }
 
     function toggleHistory(show) {
-      window.clearTimeout(historyCloseTimer);
-      historyCloseTimer = 0;
+      const wasOpen = state.isHistoryOpen;
+      window.clearTimeout(historyAnimationTimer);
+      historyAnimationTimer = 0;
+      els.historyModal.classList.remove("is-entering", "is-leaving");
       state.isHistoryOpen = show;
       els.historyModal.setAttribute("aria-hidden", String(!show));
       els.historyBtn.setAttribute("aria-expanded", String(show));
       document.body.classList.toggle("history-open", show);
       if (show) {
-        els.historyModal.classList.remove("closing");
         els.historyModal.classList.add("active");
-        window.requestAnimationFrame(() => els.historyModal.focus({ preventScroll: true }));
+        if (!wasOpen) {
+          els.historyModal.classList.add("is-entering");
+          historyAnimationTimer = window.setTimeout(() => finishHistoryAnimation("is-entering"), HISTORY_OPEN_ANIMATION_MS);
+          window.requestAnimationFrame(() => els.historyModal.focus({ preventScroll: true }));
+        }
       } else {
         els.historyModal.classList.remove("active");
-        els.historyModal.classList.add("closing");
-        historyCloseTimer = window.setTimeout(() => {
-          els.historyModal.classList.remove("closing");
-          historyCloseTimer = 0;
-        }, HISTORY_CLOSE_ANIMATION_MS);
-        els.historyBtn.focus({ preventScroll: true });
+        if (wasOpen) {
+          els.historyModal.classList.add("is-leaving");
+          historyAnimationTimer = window.setTimeout(() => finishHistoryAnimation("is-leaving"), HISTORY_CLOSE_ANIMATION_MS);
+        }
+        if (document.body.classList.contains("keyboard-focus")) {
+          els.historyBtn.focus({ preventScroll: true });
+        }
       }
+    }
+
+    function finishHistoryAnimation(className) {
+      els.historyModal.classList.remove(className);
+      historyAnimationTimer = 0;
     }
 
     function formatLatency(value) {

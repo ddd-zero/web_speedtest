@@ -875,21 +875,34 @@ mod tests {
         assert!(html.contains("height: 100dvh"));
         assert!(html.contains("        scrollbar-gutter: auto;"));
         assert!(html.contains("        border: none;\n      }\n\n      .history-toolbar"));
-        assert!(html.contains("opacity: 0;\n      transform: scale(0.96);"));
-        assert!(html.contains("transition:\n        opacity .16s ease,\n        transform .18s cubic-bezier(.22, 1, .36, 1);"));
-        assert!(html.contains("will-change: transform, opacity"));
-        assert!(html.contains("opacity: 1;\n      transform: scale(1);\n      animation: popIn"));
-        assert!(html.contains(".modal-overlay.closing"));
-        assert!(html.contains("animation: popOut .2s cubic-bezier(.4, 0, .2, 1) both;"));
+        assert!(html.contains("opacity .2s ease,\n        visibility 0s linear .2s"));
+        assert!(html.contains(".modal-overlay.active .modal-content {\n      opacity: 1;\n      transform: scale(1);\n    }"));
+        assert!(
+            html.contains(".modal-overlay.is-entering .modal-content {\n      animation: popIn")
+        );
+        assert!(
+            html.contains(".modal-overlay.is-leaving .modal-content {\n      animation: popOut")
+        );
         assert!(html.contains("@keyframes popIn"));
         assert!(html.contains("@keyframes popOut"));
-        assert!(html.contains("animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)"));
-        assert!(html.contains("transform: scale(0.95)"));
+        assert!(!html.contains(".modal-overlay.active .modal-content {\n      opacity: 1;\n      transform: scale(1);\n      animation:"));
+        assert!(!html.contains("historyDialogIn"));
+        assert!(!html.contains("historyDialogOut"));
+        assert!(html.contains("transform: scale(0.96)"));
         assert!(html.contains("transform: scale(1)"));
+        assert!(html.contains("@media (prefers-reduced-motion: reduce)"));
         assert!(html.contains(".modal-overlay:focus"));
         assert!(html.contains("id=\"close-history-btn\""));
-        assert!(html.contains("const HISTORY_CLOSE_ANIMATION_MS = 220"));
-        assert!(html.contains("els.historyModal.classList.add(\"closing\")"));
+        assert!(html.contains("const HISTORY_OPEN_ANIMATION_MS = 300"));
+        assert!(html.contains("const HISTORY_CLOSE_ANIMATION_MS = 200"));
+        assert!(!html.contains("historyOpenTimer"));
+        assert!(!html.contains("historyCloseTimer"));
+        assert!(html.contains("let historyAnimationTimer = 0"));
+        assert!(html.contains("els.historyModal.classList.add(\"is-entering\")"));
+        assert!(html.contains("els.historyModal.classList.add(\"is-leaving\")"));
+        assert!(html.contains("finishHistoryAnimation(\"is-entering\""));
+        assert!(html.contains("finishHistoryAnimation(\"is-leaving\""));
+        assert!(!html.contains("els.historyModal.classList.add(\"closing\")"));
         assert!(html.contains("els.closeHistoryBtn.addEventListener"));
         assert!(!html.contains("clip-path: circle"));
         assert!(!html.contains("backdrop-filter"));
@@ -988,11 +1001,15 @@ mod tests {
             "移动端按钮应禁用系统蓝色触摸高亮，避免点击后出现选中提示"
         );
         assert!(
-            html.contains("button:focus:not(:focus-visible) {\n      outline: none;\n    }"),
-            "指针点击触发的按钮焦点不应显示默认轮廓"
+            html.contains("document.body.classList.toggle(\"keyboard-focus\", true);")
+                && html.contains("document.body.classList.toggle(\"keyboard-focus\", false);")
+                && html.contains(
+                    "body:not(.keyboard-focus) button:focus-visible {\n      outline: none;\n    }"
+                ),
+            "指针点击触发的按钮焦点不应显示默认轮廓，避免移动端出现椭圆粗线"
         );
         assert!(
-            html.contains("button:focus-visible")
+            html.contains("body.keyboard-focus button:focus")
                 && html.contains("outline: 3px solid rgba(218, 119, 86, .48);"),
             "键盘导航仍需要保留符合页面主题色的可见焦点"
         );
@@ -1042,12 +1059,12 @@ mod tests {
             "所有按钮点击都应在捕获阶段先播放点击反馈"
         );
         assert!(
-            html.contains(
-                "els.historyBtn.addEventListener(\"click\", () => runAfterButtonClickFeedback(openHistory));"
-            ) && html.contains(
-                "els.closeHistoryBtn.addEventListener(\"click\", () => runAfterButtonClickFeedback(() => toggleHistory(false)));"
-            ),
-            "打开和关闭测速记录应等待点击反馈可见后再切换弹窗"
+            html.contains("els.historyBtn.addEventListener(\"click\", openHistory);")
+                && html.contains(
+                    "els.closeHistoryBtn.addEventListener(\"click\", () => toggleHistory(false));"
+                )
+                && !html.contains("runAfterButtonClickFeedback(() => toggleHistory(false))"),
+            "打开和关闭测速记录都应立即切换弹窗，避免移动端把按钮反馈误看成弹窗闪烁"
         );
     }
 
@@ -1240,11 +1257,11 @@ mod tests {
             html.contains(".history-child-row {\n      --history-row-bg: #f3f4f6;")
                 && html.contains("--history-row-hover-bg: #eceff3;")
                 && html.contains(".history-group-row:hover,")
-                && html.contains(".history-group-row:has(> td:hover),")
+                && html.contains(".history-group-row:has(> td:hover) {")
                 && html.contains("--history-row-bg: #fff4ed;")
                 && html.contains("--history-row-ring: rgba(218, 119, 86, .22);")
-                && html.contains("--history-row-fg: var(--accent);"),
-            "折叠展开后的明细行应使用灰底，分组摘要行 hover 应整行反馈"
+                && !html.contains("--history-row-fg"),
+            "折叠展开后的明细行应使用灰底，分组摘要行 hover 只能提供整行底色和边框反馈"
         );
         assert!(
             html.contains("style=\"--history-row:${options.rowIndex};\""),
@@ -1300,12 +1317,18 @@ mod tests {
             "折叠分组摘要行应通过整行指针样式表达可点击"
         );
         assert!(
-            html.contains(".history-group-row:hover .history-group-toggle")
-                && html.contains(".history-group-row:has(> td:hover) .history-group-toggle")
-                && html.contains(".history-group-row:hover > td")
-                && html.contains(".history-group-row:has(> td:hover) > td")
+            !html.contains(".history-group-row:hover .history-group-toggle")
+                && !html.contains(".history-group-row:has(> td:hover) .history-group-toggle")
+                && !html.contains(".history-group-row:hover > td")
+                && !html.contains(".history-group-row:has(> td:hover) > td")
                 && !html.contains(".history-group-toggle:hover:not(:disabled),\n    .history-group-toggle:active:not(:disabled),\n    .history-group-toggle.click-feedback:not(:disabled) {\n      color: var(--accent);\n      background: #fff4ed;"),
-            "分组摘要 hover 样式应由整行提供，时间按钮不应再单独出现小块高亮"
+            "分组摘要 hover 样式应只由整行底色提供，时间按钮和单元格文字不应单独变色"
+        );
+        assert!(
+            html.contains("if (button.matches(\"[data-history-group-toggle]\")) return;")
+                && !html.contains(".history-group-row:focus-within")
+                && !html.contains(".history-group-toggle:hover:not(:disabled),"),
+            "折叠摘要行里的时间按钮不应再继承按钮点击反馈或 focus-within 高亮，避免展开时单独闪一下"
         );
     }
 
@@ -1318,6 +1341,57 @@ mod tests {
                 ".history-speed-sort-btn[aria-pressed=\"true\"] {\n      color: var(--accent);\n      background: #fff4ed;\n      border-color: rgba(218, 119, 86, .22);"
             ),
             "下载速度排序激活后应保持 hover 时的边框和底色，避免状态反馈只在鼠标悬停时出现"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_use_stable_history_group_row_feedback() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("function runAfterHistoryRowClickFeedback(row, action)")
+                && html.contains("playHistoryRowClickFeedback(row);")
+                && html.contains("window.setTimeout(action, BUTTON_CLICK_FEEDBACK_MS);")
+                && html.contains(".history-group-row.click-feedback {"),
+            "折叠行应使用独立的整行点击反馈，并延迟重渲染到反馈可见之后"
+        );
+        assert!(
+            !html.contains(".history-group-row.click-feedback > td")
+                && !html.contains(".history-group-row.click-feedback .history-group-toggle")
+                && html.contains("-webkit-tap-highlight-color: transparent;")
+                && html.contains("-webkit-user-select: none;")
+                && html.contains("user-select: none;"),
+            "折叠行点击反馈不应让时间文字变色，移动端也不应出现系统蓝色选中块"
+        );
+        assert!(
+            html.contains("pointer-events: auto;")
+                && html.contains("@media (hover: hover)")
+                && html.contains(".history-group-row:has(> td:hover) {"),
+            "整行背景层应能接收列间空白点击，hover 反馈也应只在支持 hover 的设备上启用"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_keep_mobile_history_actions_on_one_row() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".history-toolbar {\n        grid-template-columns: minmax(0, 1fr) 42px;")
+                && html.contains(".history-toolbar .search-select,\n      .history-toolbar .search-input {\n        grid-column: 1 / -1;")
+                && html.contains("#query-history-btn {\n        grid-column: 1;")
+                && html.contains("#history-collapse-toggle {\n        grid-column: 2;"),
+            "移动端历史查询工具栏应让查询按钮和折叠按钮保持同一行，避免折叠按钮被挤到下一行"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_open_history_modal_without_delayed_feedback() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("els.historyBtn.addEventListener(\"click\", openHistory);")
+                && !html.contains("runAfterButtonClickFeedback(openHistory)"),
+            "测速记录按钮应立即打开弹窗，避免先播放按钮反馈再打开导致移动端闪一下"
         );
     }
 
