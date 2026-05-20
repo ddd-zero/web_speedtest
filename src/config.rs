@@ -34,12 +34,26 @@ pub struct DatabaseConfig {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct TestSettings {
     pub latency_rounds: usize,
     pub latency_timeout_ms: u64,
     pub download_test_ms: u64,
+    pub download_file_path: String,
     pub progress_save_ratio: f64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct FileTestSettings {
+    #[serde(default = "default_latency_rounds")]
+    latency_rounds: usize,
+    #[serde(default = "default_latency_timeout_ms")]
+    latency_timeout_ms: u64,
+    #[serde(default = "default_download_test_ms")]
+    download_test_ms: u64,
+    download_file_path: Option<String>,
+    #[serde(default = "default_progress_save_ratio")]
+    progress_save_ratio: f64,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -60,7 +74,7 @@ struct FileConfig {
     #[serde(default)]
     database: DatabaseConfig,
     #[serde(default)]
-    test: TestSettings,
+    test: FileTestSettings,
     #[serde(default)]
     history: HistorySettings,
     #[serde(default)]
@@ -113,6 +127,10 @@ pub enum ConfigError {
     InvalidDomainUrl(String),
     #[error("重复线路域名: {0}")]
     DuplicateDomain(String),
+    #[error("test.download_file_path 未配置，无法生成下载测速 URL")]
+    MissingDownloadFilePath,
+    #[error("test.download_file_path 必须以 / 开头且不能只写 /: {0}")]
+    InvalidDownloadFilePath(String),
     #[error("历史记录默认查询数量不能大于最大查询数量")]
     InvalidHistoryLimit,
 }
@@ -133,7 +151,8 @@ impl RuntimeConfig {
 
     fn from_file_config(file_config: FileConfig) -> Result<Self, ConfigError> {
         let domain_items = load_domain_items(&file_config.domains)?;
-        let targets = build_targets(&domain_items)?;
+        let test = file_config.test.normalized()?;
+        let targets = build_targets(&domain_items, &test.download_file_path)?;
         if targets.is_empty() {
             return Err(ConfigError::NoDomains);
         }
@@ -141,7 +160,7 @@ impl RuntimeConfig {
         Ok(Self {
             server: file_config.server,
             database: file_config.database,
-            test: file_config.test.normalized(),
+            test,
             history: file_config.history.normalized()?,
             display: file_config.display,
             targets,
@@ -170,25 +189,44 @@ impl Default for DatabaseConfig {
     }
 }
 
-impl Default for TestSettings {
+impl Default for FileTestSettings {
     fn default() -> Self {
         Self {
-            latency_rounds: 5,
-            latency_timeout_ms: 3500,
-            download_test_ms: 8500,
-            progress_save_ratio: 0.5,
+            latency_rounds: default_latency_rounds(),
+            latency_timeout_ms: default_latency_timeout_ms(),
+            download_test_ms: default_download_test_ms(),
+            download_file_path: None,
+            progress_save_ratio: default_progress_save_ratio(),
         }
     }
 }
 
-impl TestSettings {
-    fn normalized(mut self) -> Self {
-        self.latency_rounds = self.latency_rounds.clamp(1, 20);
-        self.latency_timeout_ms = self.latency_timeout_ms.clamp(300, 30_000);
-        self.download_test_ms = self.download_test_ms.clamp(1_000, 120_000);
-        self.progress_save_ratio = self.progress_save_ratio.clamp(0.05, 0.95);
-        self
+impl FileTestSettings {
+    fn normalized(self) -> Result<TestSettings, ConfigError> {
+        Ok(TestSettings {
+            latency_rounds: self.latency_rounds.clamp(1, 20),
+            latency_timeout_ms: self.latency_timeout_ms.clamp(300, 30_000),
+            download_test_ms: self.download_test_ms.clamp(1_000, 120_000),
+            download_file_path: normalize_download_file_path(self.download_file_path.as_deref())?,
+            progress_save_ratio: self.progress_save_ratio.clamp(0.05, 0.95),
+        })
     }
+}
+
+fn default_latency_rounds() -> usize {
+    5
+}
+
+fn default_latency_timeout_ms() -> u64 {
+    3500
+}
+
+fn default_download_test_ms() -> u64 {
+    8500
+}
+
+fn default_progress_save_ratio() -> f64 {
+    0.5
 }
 
 impl Default for HistorySettings {
@@ -288,7 +326,10 @@ fn filter_blacklisted_domains(
     Ok(filtered_domains)
 }
 
-fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
+fn build_targets(
+    items: &[DomainItem],
+    download_file_path: &str,
+) -> Result<Vec<TestTarget>, ConfigError> {
     let mut used_keys = HashSet::new();
     let mut used_hosts = HashSet::new();
     items
@@ -316,10 +357,21 @@ fn build_targets(items: &[DomainItem]) -> Result<Vec<TestTarget>, ConfigError> {
                 host,
                 cname: display_cname(item.cname.as_deref()),
                 trace_url: format!("{base_url}/meta"),
-                download_url: format!("{base_url}/eso1008a.webp"),
+                download_url: format!("{base_url}{download_file_path}"),
             })
         })
         .collect()
+}
+
+fn normalize_download_file_path(value: Option<&str>) -> Result<String, ConfigError> {
+    let Some(path) = non_empty_string(value) else {
+        return Err(ConfigError::MissingDownloadFilePath);
+    };
+    // 下载文件路径只描述站内路径，线路域名仍由 domains.url 决定，避免配置成完整 URL 后绕过线路。
+    if !path.starts_with('/') || path == "/" {
+        return Err(ConfigError::InvalidDownloadFilePath(path.to_string()));
+    }
+    Ok(path.to_string())
 }
 
 fn display_label(name: Option<&str>, host: &str) -> String {
@@ -469,6 +521,7 @@ mod tests {
             latency_rounds = 7
             latency_timeout_ms = 2200
             download_test_ms = 12000
+            download_file_path = "/custom-speed.bin"
             progress_save_ratio = 0.35
 
             [domains]
@@ -483,6 +536,71 @@ mod tests {
         assert_eq!(config.test.latency_rounds, 7);
         assert_eq!(config.test.download_test_ms, 12000);
         assert_eq!(config.test.progress_save_ratio, 0.35);
+        assert_eq!(
+            config.targets[0].download_url,
+            "https://a1.example.com/custom-speed.bin"
+        );
+    }
+
+    #[test]
+    fn runtime_config_should_require_download_file_path_when_domains_exist() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speedtest-missing-download-path-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let result = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ));
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert!(matches!(result, Err(ConfigError::MissingDownloadFilePath)));
+    }
+
+    #[test]
+    fn runtime_config_should_reject_invalid_download_file_path() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speedtest-invalid-download-path-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let result = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [test]
+            download_file_path = "speed.bin"
+
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ));
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert!(
+            matches!(result, Err(ConfigError::InvalidDownloadFilePath(path)) if path == "speed.bin")
+        );
     }
 
     #[test]
@@ -506,6 +624,9 @@ mod tests {
             [history]
             default_limit = 40
             max_limit = 90
+
+            [test]
+            download_file_path = "/history-speed.bin"
 
             [domains]
             path = '{}'
@@ -540,6 +661,9 @@ mod tests {
             [display]
             show_domains = false
 
+            [test]
+            download_file_path = "/display-speed.bin"
+
             [domains]
             path = '{}'
             "#,
@@ -573,6 +697,9 @@ mod tests {
             default_limit = 201
             max_limit = 200
 
+            [test]
+            download_file_path = "/invalid-history-speed.bin"
+
             [domains]
             path = '{}'
             "#,
@@ -605,6 +732,9 @@ mod tests {
 
         let toml = format!(
             r#"
+            [test]
+            download_file_path = "/domain-speed.bin"
+
             [domains]
             path = '{}'
 
@@ -638,7 +768,7 @@ mod tests {
         assert_eq!(config.targets[1].cname, "-");
         assert_eq!(
             config.targets[1].download_url,
-            "https://line-b.example.com/eso1008a.webp"
+            "https://line-b.example.com/domain-speed.bin"
         );
         assert_eq!(config.targets[2].label, "新增线路");
         assert_eq!(config.targets[2].host, "new.example.com");
@@ -667,6 +797,9 @@ mod tests {
 
         let config = RuntimeConfig::from_toml_str(&format!(
             r#"
+            [test]
+            download_file_path = "/blacklist-speed.bin"
+
             [domains]
             path = '{}'
             blacklist = [
@@ -703,6 +836,9 @@ mod tests {
 
         let result = RuntimeConfig::from_toml_str(&format!(
             r#"
+            [test]
+            download_file_path = "/duplicate-speed.bin"
+
             [domains]
             path = '{}'
             "#,

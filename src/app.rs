@@ -381,7 +381,13 @@ mod tests {
     fn client_config_should_include_display_settings() {
         let payload = super::ClientConfig {
             targets: Vec::new(),
-            test: crate::config::TestSettings::default(),
+            test: crate::config::TestSettings {
+                latency_rounds: 5,
+                latency_timeout_ms: 3500,
+                download_test_ms: 8500,
+                download_file_path: "/speed-test.bin".to_string(),
+                progress_save_ratio: 0.5,
+            },
             history: crate::config::HistorySettings::default(),
             display: crate::config::DisplaySettings {
                 show_domains: false,

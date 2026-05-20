@@ -18,6 +18,8 @@ latency_rounds = 5
 latency_timeout_ms = 3500
 # 下载测速持续时间，单位毫秒。程序会限制在 1000 到 120000 之间。
 download_test_ms = 8500
+# 下载测速文件的站内路径。必填；程序会将它拼接到每条线路的域名后面，不会使用代码内置回退值。
+download_file_path = "/eso1008a.webp"
 # 下载进度自动保存比例。0.5 表示完成 50% 测试时保存一次中间结果，程序会限制在 0.05 到 0.95 之间。
 progress_save_ratio = 0.5
 
