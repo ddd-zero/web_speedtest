@@ -270,7 +270,7 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 8px 16px;
-      margin-bottom: 10px;
+      margin-bottom: 16px;
     }
 
     .info-row {
@@ -284,6 +284,13 @@
 
     .info-row:last-child {
       border-bottom: none;
+    }
+
+    .info-label-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
 
     .label {
@@ -308,7 +315,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin: 10px 0 10px;
+      margin: 16px 0 10px;
       white-space: nowrap;
     }
 
@@ -316,13 +323,13 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      margin: 0 0 8px;
-      padding: 4px 10px;
+      margin: 0;
+      padding: 3px 8px;
       border: 1px solid rgba(201, 72, 72, .58);
       border-radius: 999px;
       color: var(--bad);
       background: rgba(201, 72, 72, .08);
-      font-size: .68rem;
+      font-size: .65rem;
       font-weight: 800;
       line-height: 1.2;
       white-space: nowrap;
@@ -1460,7 +1467,10 @@
 
       <div class="info-group">
         <div class="info-row">
-          <span class="label">用户 IP</span>
+          <div class="info-label-group">
+            <span class="client-ip-mismatch-alert" id="client-ip-mismatch-alert" hidden>IP异常，请检查分流</span>
+            <span class="label">用户 IP</span>
+          </div>
           <span class="value" id="client-ip">正在检测</span>
         </div>
         <div class="info-row">
@@ -1472,7 +1482,6 @@
           <span class="value" id="client-isp">正在检测</span>
         </div>
       </div>
-      <div class="client-ip-mismatch-alert" id="client-ip-mismatch-alert" hidden>同用户IP不一致</div>
 
       <div class="section-title">
         <h2>线路测试</h2>

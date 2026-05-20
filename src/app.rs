@@ -539,13 +539,24 @@ mod tests {
             "主页应从当前站点同源的 /cdn-cgi/trace 读取 Cloudflare Trace 信息"
         );
         assert!(
-            html.contains("id=\"client-ip-mismatch-alert\" hidden")
+            html.contains(
+                "<div class=\"info-label-group\">\n            <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>同用户IP不一致</span>\n            <span class=\"label\">用户 IP</span>\n          </div>"
+            )
+                && !html.contains(
+                    "</div>\n      <div class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>同用户IP不一致</div>\n\n      <div class=\"section-title\">"
+                )
                 && html.contains(
                     "clientIpMismatchAlert: document.getElementById(\"client-ip-mismatch-alert\"),"
                 )
+                && html.contains(".info-label-group {")
                 && html.contains(".client-ip-mismatch-alert {")
                 && html.contains(".client-ip-mismatch-alert[hidden] {"),
-            "用户信息和线路标题之间应预留一个默认隐藏的红色异常标识"
+            "红色异常标识应放在用户 IP 标签前面，不应占用用户信息和线路标题之间的夹层"
+        );
+        assert!(
+            html.contains(".info-group {\n      background: var(--panel-bg);\n      border: 1px solid var(--border);\n      border-radius: 14px;\n      padding: 8px 16px;\n      margin-bottom: 16px;")
+                && html.contains(".section-title {\n      display: flex;\n      align-items: center;\n      justify-content: space-between;\n      gap: 12px;\n      margin: 16px 0 10px;"),
+            "异常标识移入用户 IP 行后，应恢复信息区和线路标题的原有间距"
         );
         assert!(
             html.contains("currentClientIpMismatch: false")
