@@ -362,7 +362,7 @@ fn build_targets(
                 label: display_label(item.name.as_deref(), &host),
                 host,
                 cname: display_cname(item.cname.as_deref()),
-                trace_url: format!("{base_url}/meta"),
+                trace_url: format!("{base_url}/cdn-cgi/trace"),
                 download_url: format!("{base_url}{download_file_path}"),
             })
         })
@@ -849,7 +849,7 @@ mod tests {
         assert_eq!(config.targets[0].cname, "line-a.cname.example.com");
         assert_eq!(
             config.targets[0].trace_url,
-            "https://line-a.example.com/meta"
+            "https://line-a.example.com/cdn-cgi/trace"
         );
         assert_eq!(config.targets[1].label, "覆盖后的 a1");
         assert_eq!(config.targets[1].cname, "-");

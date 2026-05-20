@@ -1823,7 +1823,7 @@
 
     function applyClientInfo(publicInfo, metaInfo) {
       const shouldUseMetaInfo = shouldUseClientMetaInfo(publicInfo?.ip, metaInfo?.ip);
-      state.currentClientIpMismatch = true;
+      state.currentClientIpMismatch = shouldUseMetaInfo;
 
       if (shouldUseMetaInfo) {
         state.currentClientIp = metaInfo.ip;
@@ -2846,12 +2846,18 @@
     }
 
     function parseTrace(text) {
-      const raw = cleanText(text);
-      const parsed = parseIpLookupPayload(JSON.parse(raw));
+      const fields = {};
+      cleanText(text).split(/\r?\n/).forEach(line => {
+        const separatorIndex = line.indexOf("=");
+        if (separatorIndex <= 0) return;
+        const key = cleanText(line.slice(0, separatorIndex));
+        if (!key) return;
+        fields[key] = line.slice(separatorIndex + 1).trim();
+      });
       return {
-        ip: parsed.ip,
-        loc: parsed.info.country,
-        colo: parsed.colo,
+        ip: cleanText(fields.ip),
+        loc: cleanText(fields.loc),
+        colo: cleanText(fields.colo),
       };
     }
 

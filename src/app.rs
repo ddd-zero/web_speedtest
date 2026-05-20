@@ -608,9 +608,13 @@ mod tests {
             "测速保存 payload 应直接使用异常切换后的当前客户端 IP 和地理信息"
         );
         assert!(
-            html.contains("const parsed = parseIpLookupPayload(JSON.parse(raw));")
-                && html.contains("colo: parsed.colo,"),
-            "线路延迟检测应只解析 /meta JSON"
+            html.contains("function parseTrace(text)")
+                && html.contains("const separatorIndex = line.indexOf(\"=\");")
+                && html.contains("ip: cleanText(fields.ip),")
+                && html.contains("loc: cleanText(fields.loc),")
+                && html.contains("colo: cleanText(fields.colo),")
+                && !html.contains("const parsed = parseIpLookupPayload(JSON.parse(raw));"),
+            "线路延迟检测应解析 /cdn-cgi/trace 文本，不应复用客户端 /meta JSON"
         );
     }
 
