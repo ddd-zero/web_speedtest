@@ -1648,6 +1648,7 @@
       currentClientIpMismatch: false,
       currentColos: new Map(),
       isDownloading: false,
+      isLatencyTesting: false,
       isOneClickDownloading: false,
       isHistoryOpen: false,
       isPrivacyMode: false,
@@ -1876,9 +1877,10 @@
     }
 
     async function runLatencyRounds(options = {}) {
-      if (!state.targets.length || state.isDownloading || state.isOneClickDownloading) return;
+      if (!state.targets.length || state.isDownloading || state.isLatencyTesting || state.isOneClickDownloading) return;
       const discardFirstRound = Boolean(options.discardFirstRound);
       const totalRounds = state.test.latency_rounds + (discardFirstRound ? 1 : 0);
+      state.isLatencyTesting = true;
       state.targetStates.forEach(targetState => {
         targetState.samples = [];
         targetState.stats = null;
@@ -1891,51 +1893,55 @@
       els.latencyStatus.textContent = renderLatencyProgress(0, discardFirstRound);
       renderTargetList();
 
-      for (let round = 1; round <= totalRounds; round += 1) {
-        const isWarmupRound = discardFirstRound && round === 1;
-        await Promise.all(state.targets.map(async target => {
-          const targetState = state.targetStates.get(target.key);
-          if (!targetState || targetState.latencySkipped) return;
+      try {
+        for (let round = 1; round <= totalRounds; round += 1) {
+          const isWarmupRound = discardFirstRound && round === 1;
+          await Promise.all(state.targets.map(async target => {
+            const targetState = state.targetStates.get(target.key);
+            if (!targetState || targetState.latencySkipped) return;
 
-          const result = await measureHttpsLatency(target);
-          if (result.ok) {
-            targetState.consecutiveLatencyFailures = 0;
-            if (!isWarmupRound) targetState.samples.push(result.ms);
-            targetState.status = "testing";
-            targetState.error = "";
-            if (result.trace.colo) {
-              state.currentColos.set(target.key, result.trace.colo);
-              updateClientInfo();
+            const result = await measureHttpsLatency(target);
+            if (result.ok) {
+              targetState.consecutiveLatencyFailures = 0;
+              if (!isWarmupRound) targetState.samples.push(result.ms);
+              targetState.status = "testing";
+              targetState.error = "";
+              if (result.trace.colo) {
+                state.currentColos.set(target.key, result.trace.colo);
+                updateClientInfo();
+              }
+            } else if (isWarmupRound) {
+              targetState.error = result.error;
+            } else {
+              targetState.consecutiveLatencyFailures += 1;
+              if (targetState.consecutiveLatencyFailures >= MAX_CONSECUTIVE_LATENCY_FAILURES) {
+                targetState.latencySkipped = true;
+                targetState.status = targetState.samples.length ? "ready" : "failed";
+                targetState.error = `连续失败 ${MAX_CONSECUTIVE_LATENCY_FAILURES} 次`;
+                return;
+              }
+              targetState.error = `${result.error} ${targetState.consecutiveLatencyFailures}/${MAX_CONSECUTIVE_LATENCY_FAILURES}`;
             }
-          } else if (isWarmupRound) {
-            targetState.error = result.error;
-          } else {
-            targetState.consecutiveLatencyFailures += 1;
-            if (targetState.consecutiveLatencyFailures >= MAX_CONSECUTIVE_LATENCY_FAILURES) {
-              targetState.latencySkipped = true;
-              targetState.status = targetState.samples.length ? "ready" : "failed";
-              targetState.error = `连续失败 ${MAX_CONSECUTIVE_LATENCY_FAILURES} 次`;
-              return;
+          }));
+
+          state.targetStates.forEach(targetState => {
+            if (targetState.samples.length) {
+              targetState.stats = summarizeLatency(targetState.samples);
             }
-            targetState.error = `${result.error} ${targetState.consecutiveLatencyFailures}/${MAX_CONSECUTIVE_LATENCY_FAILURES}`;
-          }
-        }));
+          });
+          els.latencyStatus.textContent = renderLatencyProgress(round, discardFirstRound);
+          renderTargetList();
+          if (round < totalRounds) await sleep(140);
+        }
 
         state.targetStates.forEach(targetState => {
-          if (targetState.samples.length) {
-            targetState.stats = summarizeLatency(targetState.samples);
-          }
+          targetState.status = targetState.samples.length ? "ready" : "failed";
         });
-        els.latencyStatus.textContent = renderLatencyProgress(round, discardFirstRound);
+        els.latencyStatus.textContent = renderLatencySummary();
+      } finally {
+        state.isLatencyTesting = false;
         renderTargetList();
-        if (round < totalRounds) await sleep(140);
       }
-
-      state.targetStates.forEach(targetState => {
-        targetState.status = targetState.samples.length ? "ready" : "failed";
-      });
-      els.latencyStatus.textContent = renderLatencySummary();
-      renderTargetList();
     }
 
     function renderLatencyProgress(round, discardFirstRound = false) {
@@ -2012,7 +2018,7 @@
       if (state.isDownloading) return;
       const target = state.targets.find(item => item.key === targetKey);
       const targetState = state.targetStates.get(targetKey);
-      if (!target || !targetState || targetState.status === "failed") return;
+      if (!target || !canStartSingleDownload(targetState)) return;
 
       state.isDownloading = true;
       state.activeTargetKey = targetKey;
@@ -2377,7 +2383,7 @@
         const stats = targetState?.stats;
         const isRecommended = target.key === recommendedKey;
         const isActive = state.activeTargetKey === target.key;
-        const disabled = state.isOneClickDownloading || (state.isDownloading && !isActive) || targetState?.status === "failed";
+        const disabled = state.isOneClickDownloading || (state.isDownloading && !isActive) || !canStartSingleDownload(targetState);
         const buttonText = renderDownloadButtonText(targetState);
         const progress = renderDownloadProgress(targetState);
         return `<div class="target-row ${isRecommended ? "recommended" : ""} ${isActive ? "active" : ""}" data-target-key="${escapeHtml(target.key)}">
@@ -2594,12 +2600,16 @@
     function oneClickDownloadTargets() {
       return sortedTargetsForRender().filter(target => {
         const targetState = state.targetStates.get(target.key);
-        return targetState?.stats && targetState.status === "ready" && targetState?.status !== "failed";
+        return canStartSingleDownload(targetState) && targetState.status === "ready";
       });
     }
 
+    function canStartSingleDownload(targetState) {
+      return Boolean(targetState?.stats && targetState.samples.length > 0 && targetState.status !== "failed");
+    }
+
     function syncTopActionButtons() {
-      const canRunOneClick = state.isOneClickDownloading || oneClickDownloadTargets().length > 0;
+      const canRunOneClick = state.isOneClickDownloading || (!state.isLatencyTesting && oneClickDownloadTargets().length > 0);
       els.oneClickDownloadBtn.textContent = state.isOneClickDownloading ? "停止测速" : "一键测速";
       els.oneClickDownloadBtn.disabled = !canRunOneClick || (state.isDownloading && !state.isOneClickDownloading);
       els.refreshLatencyBtn.disabled = state.isDownloading || state.isOneClickDownloading;

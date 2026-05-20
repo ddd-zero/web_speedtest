@@ -1812,8 +1812,49 @@ mod tests {
         assert!(html.contains("oneClickDownloadTargets()"));
         assert!(html.contains("sortedTargetsForRender()"));
         assert!(html.contains("targetState.status === \"ready\""));
-        assert!(html.contains("targetState?.status !== \"failed\""));
+        assert!(html.contains("canStartSingleDownload(targetState)"));
         assert!(html.contains("startDownloadTest(target.key, ONE_CLICK_DOWNLOAD_TEST_MS)"));
+    }
+
+    #[test]
+    fn embedded_index_html_should_require_completed_latency_before_download() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("function canStartSingleDownload(targetState)")
+                && html.contains(
+                    "return Boolean(targetState?.stats && targetState.samples.length > 0 && targetState.status !== \"failed\");"
+                ),
+            "下载测速必须至少有一条正式 HTTPS 延迟样本，预热阶段不能算可测速"
+        );
+        assert!(
+            html.contains("if (!target || !canStartSingleDownload(targetState)) return;"),
+            "即使手动触发 startDownloadTest，也应在前端入口阻止无延迟结果的提交"
+        );
+        assert!(
+            html.contains(
+                "const disabled = state.isOneClickDownloading || (state.isDownloading && !isActive) || !canStartSingleDownload(targetState);"
+            ),
+            "单线路开始测速按钮应在正式延迟结果出来前保持禁用，正式样本出来后不必等全部延迟完成"
+        );
+        assert!(
+            html.contains("isLatencyTesting: false")
+                && html.contains("state.isLatencyTesting = true;")
+                && html.contains("state.isLatencyTesting = false;"),
+            "一键测速需要知道整轮延迟检测是否仍在运行"
+        );
+        assert!(
+            html.contains(
+                "return canStartSingleDownload(targetState) && targetState.status === \"ready\";"
+            ),
+            "一键测速也只能选择已有正式延迟结果的线路"
+        );
+        assert!(
+            html.contains(
+                "const canRunOneClick = state.isOneClickDownloading || (!state.isLatencyTesting && oneClickDownloadTargets().length > 0);"
+            ),
+            "一键测速必须等整轮延迟检测结束后才可用"
+        );
     }
 
     #[test]
