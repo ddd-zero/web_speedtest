@@ -593,10 +593,12 @@ mod tests {
         assert!(
             html.contains(
                 "const shouldUseMetaInfo = shouldUseClientMetaInfo(publicInfo?.ip, metaInfo?.ip);"
-            ) && html.contains("state.currentClientIpMismatch = shouldUseMetaInfo;")
+            ) && html.contains(
+                "state.currentClientIpMismatch = shouldUseMetaInfo && !shouldUseMetaIpWithPublicInfo;"
+            )
                 && html.contains("state.currentClientIp = metaInfo.ip;")
                 && html.contains("state.currentIpInfo = metaInfo.info;"),
-            "IPv4 前缀不一致时，应切换主页用户 IP 和完整地理信息为 /meta 来源"
+            "IPv4 前缀不一致时，应切换主页用户 IP 和完整地理信息为 /meta 来源，但允许中国出口规则关闭异常"
         );
         assert!(
             html.contains("function buildResultPayload(targetKey, speed, isFinal)")
@@ -615,6 +617,35 @@ mod tests {
                 && html.contains("colo: cleanText(fields.colo),")
                 && !html.contains("const parsed = parseIpLookupPayload(JSON.parse(raw));"),
             "线路延迟检测应解析 /cdn-cgi/trace 文本，不应复用客户端 /meta JSON"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_use_meta_ip_without_alert_for_china_meta_exit() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("function isClientMetaChinaExit(metaInfo)")
+                && html
+                    .contains("const country = cleanText(metaInfo?.info?.country).toLowerCase();")
+                && html.contains("const isp = cleanText(metaInfo?.info?.isp).toLowerCase();")
+                && html.contains(
+                    "return country === \"cn\" || country === \"china\" || isp.includes(\"china\");"
+                ),
+            "/meta 来源显示为中国出口时，应通过独立判断函数识别"
+        );
+        assert!(
+            html.contains(
+                "const shouldUseMetaIpWithPublicInfo = Boolean(publicInfo && metaInfo && isClientMetaChinaExit(metaInfo));"
+            ) && html
+                .contains("state.currentClientIpMismatch = shouldUseMetaInfo && !shouldUseMetaIpWithPublicInfo;"),
+            "/meta 中国出口命中时应关闭异常提示，但保留普通前缀不一致的异常判断"
+        );
+        assert!(
+            html.contains(
+                "if (shouldUseMetaIpWithPublicInfo) {\n        state.currentClientIp = metaInfo.ip;\n        state.currentIpInfo = publicInfo.info;\n        return;\n      }"
+            ),
+            "/meta 中国出口命中时，应显示 /meta IP，同时沿用 IPIP 的位置和运营商"
         );
     }
 

@@ -1823,7 +1823,14 @@
 
     function applyClientInfo(publicInfo, metaInfo) {
       const shouldUseMetaInfo = shouldUseClientMetaInfo(publicInfo?.ip, metaInfo?.ip);
-      state.currentClientIpMismatch = shouldUseMetaInfo;
+      const shouldUseMetaIpWithPublicInfo = Boolean(publicInfo && metaInfo && isClientMetaChinaExit(metaInfo));
+      state.currentClientIpMismatch = shouldUseMetaInfo && !shouldUseMetaIpWithPublicInfo;
+
+      if (shouldUseMetaIpWithPublicInfo) {
+        state.currentClientIp = metaInfo.ip;
+        state.currentIpInfo = publicInfo.info;
+        return;
+      }
 
       if (shouldUseMetaInfo) {
         state.currentClientIp = metaInfo.ip;
@@ -2713,6 +2720,12 @@
       const publicPrefix = ipv4PrefixForComparison(publicIp);
       const metaPrefix = ipv4PrefixForComparison(metaIp);
       return Boolean(publicPrefix && metaPrefix && publicPrefix !== metaPrefix);
+    }
+
+    function isClientMetaChinaExit(metaInfo) {
+      const country = cleanText(metaInfo?.info?.country).toLowerCase();
+      const isp = cleanText(metaInfo?.info?.isp).toLowerCase();
+      return country === "cn" || country === "china" || isp.includes("china");
     }
 
     function ipv4PrefixForComparison(value) {
