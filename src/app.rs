@@ -435,6 +435,7 @@ mod tests {
         assert!(html.contains("stopDownloadTest()"));
         assert!(html.contains("patchDownloadRow(targetKey)"));
         assert!(html.contains("renderDownloadStatusText(targetState)"));
+        assert!(!html.contains("renderDownloadStateLabel"));
         assert!(!html.contains("target-download-strip"));
         assert!(html.contains("MAX_CONSECUTIVE_LATENCY_FAILURES = 3"));
         assert!(html.contains("consecutiveLatencyFailures"));
@@ -446,6 +447,7 @@ mod tests {
         assert!(!html.contains("边缘节点"));
         assert!(!html.contains("searchParams.set(\"_\""));
         assert!(html.contains("https://myip.ipip.net/json"));
+        assert!(html.contains("/cdn-cgi/trace"));
         assert!(html.contains("runLatencyRounds({ discardFirstRound: true })"));
         assert!(html.contains("https_jitter_ms"));
         assert!(html.contains("download_mbps"));
@@ -525,6 +527,66 @@ mod tests {
         assert!(
             html.contains("updateClientInfo();\n      renderTargetList();"),
             "切换隐私模式后应刷新用户 IP 和域名延迟列表"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_compare_cloudflare_trace_client_ip() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("const CLOUDFLARE_TRACE_URL = \"/cdn-cgi/trace\";"),
+            "主页应从当前站点同源的 /cdn-cgi/trace 读取 Cloudflare Trace 信息"
+        );
+        assert!(
+            html.contains("id=\"client-ip-mismatch-alert\" hidden")
+                && html.contains(
+                    "clientIpMismatchAlert: document.getElementById(\"client-ip-mismatch-alert\"),"
+                )
+                && html.contains(".client-ip-mismatch-alert {")
+                && html.contains(".client-ip-mismatch-alert[hidden] {"),
+            "用户信息和线路标题之间应预留一个默认隐藏的红色异常标识"
+        );
+        assert!(
+            html.contains("currentClientIpMismatch: false")
+                && html.contains("function updateClientIpMismatchAlert()")
+                && html
+                    .contains("els.clientIpMismatchAlert.hidden = !state.currentClientIpMismatch;"),
+            "IP 来源不一致状态应集中保存，并同步到异常标识显示状态"
+        );
+        assert!(
+            html.contains("async function fetchCloudflareTraceInfo()")
+                && html.contains(
+                    "const response = await fetch(CLOUDFLARE_TRACE_URL, { cache: \"no-store\" });"
+                )
+                && html.contains("function parseCloudflareTrace(text)")
+                && html.contains("const separatorIndex = line.indexOf(\"=\");")
+                && html.contains("ip: cleanText(fields.ip),")
+                && html.contains("loc: cleanText(fields.loc),"),
+            "Cloudflare Trace 文本应按 key=value 解析出 ip 和 loc"
+        );
+        assert!(
+            html.contains("function shouldUseCloudflareTraceInfo(publicIp, traceIp)")
+                && html.contains("function ipv4PrefixForComparison(value)")
+                && html.contains("return parts.slice(0, 2).join(\".\");")
+                && html.contains(
+                    "return Boolean(publicPrefix && tracePrefix && publicPrefix !== tracePrefix);"
+                ),
+            "只有双方都是 IPv4 且前两个段不一致时，才应判定为同用户 IP 不一致"
+        );
+        assert!(
+            html.contains("fetchPublicIpInfo().catch(() => null),")
+                && html.contains("fetchCloudflareTraceInfo().catch(() => null),")
+                && html.contains("applyClientInfo(publicInfo, traceInfo);"),
+            "IPIP 和 Cloudflare Trace 查询应互不阻塞，最后统一合并展示结果"
+        );
+        assert!(
+            html.contains("const shouldUseTraceInfo = shouldUseCloudflareTraceInfo(publicInfo?.ip, traceInfo?.ip);")
+                && html.contains("state.currentClientIpMismatch = shouldUseTraceInfo;")
+                && html.contains("state.currentClientIp = traceInfo.ip;")
+                && html.contains("country: traceInfo.loc,")
+                && html.contains("isp: \"\","),
+            "IPv4 前缀不一致时，应切换主页用户 IP 和位置为 Cloudflare Trace 来源"
         );
     }
 
@@ -659,6 +721,14 @@ mod tests {
             "窄屏操作按钮应降低高度但保留基本触控面积"
         );
         assert!(
+            html.contains(".metric {\n        align-items: flex-start;\n        text-align: left;")
+                && html.contains(".download-metric {\n        align-items: flex-end;\n        text-align: right;")
+                && html.contains(
+                    ".target-speed-value,\n      .target-download-status {\n        margin-left: auto;\n        margin-right: 0;\n        text-align: right;"
+                ),
+            "窄屏下载速度区域应保持右对齐，避免从旧版右贴齐表现退化为左对齐"
+        );
+        assert!(
             html.contains(".target-main {\n        grid-column: 1 / -1;\n        display: grid;")
                 && html.contains("gap: 2px 8px;")
                 && html.contains(
@@ -684,6 +754,20 @@ mod tests {
                 && !html.contains("flex: 0 1 240px;")
                 && !html.contains("max-width: 240px;"),
             "桌面端 CNAME 应按内容自适应，不应继续占固定长槽"
+        );
+        assert!(
+            html.contains("min-height: 17px;")
+                && html.contains(".target-host {\n      display: grid;")
+                && html.contains(".target-colo {\n      grid-column: 4;")
+                && html.contains("box-sizing: border-box;")
+                && html.contains("line-height: 1.15;"),
+            "节点徽标从无到有时应预留稳定高度，避免 HTTPS 预热完成后线路内容上下抖动"
+        );
+        assert!(
+            html.contains(
+                ".target-host-text {\n      grid-column: 1;\n      max-width: 100%;\n      line-height: 17px;"
+            ),
+            "主域名文本也应使用稳定行高，避免窄屏 display: contents 时父级最小高度失效"
         );
         assert!(
             html.contains(
@@ -1643,6 +1727,73 @@ mod tests {
         assert!(html.contains("targetState.status === \"ready\""));
         assert!(html.contains("targetState?.status !== \"failed\""));
         assert!(html.contains("startDownloadTest(target.key, ONE_CLICK_DOWNLOAD_TEST_MS)"));
+    }
+
+    #[test]
+    fn embedded_index_html_should_keep_target_speed_value_visible_on_one_line() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(".target-speed-value {\n      display: block;")
+                && html.contains("width: max-content;")
+                && html.contains("white-space: nowrap;")
+                && html.contains("overflow: visible;")
+                && html.contains("text-overflow: clip;"),
+            "主页下载速度值应强制单行完整显示，宽度不足时允许覆盖相邻内容而不是换行或省略"
+        );
+        assert!(
+            html.contains(".download-metric {\n      position: relative;")
+                && html.contains("z-index: 2;"),
+            "下载速度容器应允许速度值溢出并压在同一行相邻元素之上"
+        );
+        assert!(
+            html.contains(".target-download-status {\n      display: block;")
+                && html.contains("width: max-content;")
+                && html.contains("max-width: 100%;")
+                && html.contains("margin-left: auto;")
+                && html.contains("text-align: right;")
+                && html.contains("white-space: nowrap;"),
+            "下载状态文字应和速度值使用一致的右侧贴齐规则"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_align_target_metrics_with_shared_number_style() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                "--number-stack: ui-monospace, \"SFMono-Regular\", Menlo, Monaco, \"Cascadia Mono\", \"Segoe UI Mono\", Consolas, \"Liberation Mono\", monospace;"
+            ),
+            "HTTPS 延迟和下载速度应使用同一套本机等宽数字字体栈"
+        );
+        assert!(
+            html.contains(".metric,\n    .download-metric {\n      position: relative;")
+                && html.contains("display: flex;")
+                && html.contains("flex-direction: column;")
+                && html.contains("align-items: flex-end;")
+                && html.contains("font-family: var(--number-stack);")
+                && html.contains("font-variant-numeric: tabular-nums;")
+                && html.contains("font-feature-settings: \"tnum\" 1;"),
+            "HTTPS 延迟和下载速度容器应共享同一套对齐与数字显示规则"
+        );
+        assert!(
+            html.contains(".metric strong,\n    .target-speed-value {\n      display: block;")
+                && html.contains("font-size: 1.06rem;")
+                && html.contains("font-weight: 850;")
+                && html.contains("line-height: 1.15;")
+                && html.contains("width: max-content;")
+                && html.contains("margin-left: auto;"),
+            "HTTPS 延迟值和下载速度值应共享相同字号、行高和右贴齐盒模型"
+        );
+        assert!(
+            html.contains(".metric span,\n    .target-download-status {\n      display: block;")
+                && html.contains("line-height: 1.2;")
+                && html.contains("width: max-content;")
+                && html.contains("max-width: 100%;")
+                && html.contains("margin-left: auto;"),
+            "抖动说明和下载状态说明应共享相同行高和右贴齐盒模型"
+        );
     }
 
     #[test]
