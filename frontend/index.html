@@ -274,10 +274,10 @@
     }
 
     .info-row {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
       align-items: center;
-      gap: 14px;
+      column-gap: 14px;
       padding: 10px 0;
       border-bottom: 1px dashed #e8e2dc;
     }
@@ -287,9 +287,6 @@
     }
 
     .client-ip-row {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) max-content;
-      align-items: center;
       column-gap: 10px;
     }
 
@@ -301,21 +298,36 @@
     }
 
     .value {
-      max-width: 72%;
+      justify-self: end;
+      max-width: 100%;
       text-align: right;
-      word-break: break-all;
+      min-width: 0;
+      overflow-wrap: anywhere;
       font-family: var(--mono-stack);
       font-size: .88rem;
       font-weight: 700;
       line-height: 1.4;
     }
 
+    .client-ip-value-group {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      min-width: 0;
+      max-width: 100%;
+      justify-self: end;
+    }
+
     .client-ip-value {
-      max-width: none;
-      min-width: max-content;
+      max-width: 100%;
+      min-width: 0;
+      flex: 0 1 auto;
       white-space: nowrap;
       word-break: normal;
       overflow-wrap: normal;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .section-title {
@@ -346,7 +358,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       width: fit-content;
-      justify-self: end;
+      flex: 0 1 auto;
     }
 
     .client-ip-mismatch-alert[hidden] {
@@ -1490,8 +1502,10 @@
       <div class="info-group">
         <div class="info-row client-ip-row">
           <span class="label">用户 IP</span>
-          <span class="client-ip-mismatch-alert" id="client-ip-mismatch-alert" hidden>IP异常，请检查分流</span>
-          <span class="value client-ip-value" id="client-ip">正在检测</span>
+          <span class="client-ip-value-group">
+            <span class="client-ip-mismatch-alert" id="client-ip-mismatch-alert" hidden>IP异常，请检查分流</span>
+            <span class="value client-ip-value" id="client-ip">正在检测</span>
+          </span>
         </div>
         <div class="info-row">
           <span class="label">位置</span>
@@ -1809,7 +1823,7 @@
 
     function applyClientInfo(publicInfo, metaInfo) {
       const shouldUseMetaInfo = shouldUseClientMetaInfo(publicInfo?.ip, metaInfo?.ip);
-      state.currentClientIpMismatch = shouldUseMetaInfo;
+      state.currentClientIpMismatch = true;
 
       if (shouldUseMetaInfo) {
         state.currentClientIp = metaInfo.ip;

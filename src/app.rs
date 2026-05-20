@@ -532,7 +532,7 @@ mod tests {
         );
         assert!(
             html.contains(
-                "<div class=\"info-row client-ip-row\">\n          <span class=\"label\">用户 IP</span>\n          <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</span>\n          <span class=\"value client-ip-value\" id=\"client-ip\">正在检测</span>\n        </div>"
+                "<div class=\"info-row client-ip-row\">\n          <span class=\"label\">用户 IP</span>\n          <span class=\"client-ip-value-group\">\n            <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</span>\n            <span class=\"value client-ip-value\" id=\"client-ip\">正在检测</span>\n          </span>\n        </div>"
             )
                 && !html.contains(
                     "</div>\n      <div class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</div>\n\n      <div class=\"section-title\">"
@@ -540,14 +540,14 @@ mod tests {
                 && html.contains(
                     "clientIpMismatchAlert: document.getElementById(\"client-ip-mismatch-alert\"),"
                 )
-                && html.contains(".client-ip-row {\n      display: grid;")
-                && html.contains("grid-template-columns: auto minmax(0, 1fr) max-content;")
+                && html.contains(".client-ip-value-group {\n      display: flex;")
+                && html.contains("justify-content: flex-end;")
                 && html.contains(".client-ip-mismatch-alert {")
-                && html.contains(".client-ip-value {\n      max-width: none;")
+                && html.contains(".client-ip-value {\n      max-width: 100%;")
                 && html.contains("white-space: nowrap;")
                 && html.contains("word-break: normal;")
                 && html.contains(".client-ip-mismatch-alert[hidden] {"),
-            "红色异常标识应作为用户 IP 行的中间列，具体 IP 应保持单行优先"
+            "红色异常标识应和用户 IP 同处右侧值区域，具体 IP 应保持单行优先"
         );
         assert!(
             html.contains(".info-group {\n      background: var(--panel-bg);\n      border: 1px solid var(--border);\n      border-radius: 14px;\n      padding: 8px 16px;\n      margin-bottom: 16px;")
@@ -671,6 +671,34 @@ mod tests {
         assert!(
             html.contains("return [...locationParts.slice(0, -1), \"***\"].join(\" \");"),
             "隐私模式应直接把位置最后一段替换成 ***"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_align_client_info_values_on_shared_right_edge() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains(
+                ".info-row {\n      display: grid;\n      grid-template-columns: max-content minmax(0, 1fr);"
+            ),
+            "用户 IP、位置和运营商三行应共享两列 grid，确保右侧文本尾部对齐"
+        );
+        assert!(
+            html.contains(".value {\n      justify-self: end;")
+                && html.contains("max-width: 100%;\n      text-align: right;"),
+            "信息行右侧值应统一贴齐 grid 右边界，并在长文本时保持右对齐"
+        );
+        assert!(
+            html.contains("<span class=\"client-ip-value-group\">")
+                && html.contains(
+                    "<span class=\"value client-ip-value\" id=\"client-ip\">正在检测</span>"
+                ),
+            "IP 异常提示应和 IP 值处于同一个右侧值区域，避免改变整行列结构"
+        );
+        assert!(
+            !html.contains("grid-template-columns: auto minmax(0, 1fr) max-content;"),
+            "用户 IP 行不应使用独立三列布局，否则会和位置、运营商产生不同右边界"
         );
     }
 
