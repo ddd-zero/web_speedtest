@@ -11,7 +11,7 @@ port = 3000
 # SQLite 数据库文件路径。相对路径会基于启动进程的当前工作目录解析。
 path = "speed_results.sqlite3"
 
-[test]
+[speedtest]
 # HTTPS 延迟测试轮数。程序会限制在 1 到 20 之间，轮数越多结果越稳定但耗时越长。
 latency_rounds = 5
 # 单次延迟探测超时时间，单位毫秒。程序会限制在 300 到 30000 之间。

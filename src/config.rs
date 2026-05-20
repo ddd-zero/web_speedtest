@@ -73,7 +73,10 @@ struct FileConfig {
     server: ServerConfig,
     #[serde(default)]
     database: DatabaseConfig,
-    test: FileTestSettings,
+    #[serde(default)]
+    speedtest: Option<FileTestSettings>,
+    #[serde(default)]
+    test: Option<FileTestSettings>,
     #[serde(default)]
     history: HistorySettings,
     #[serde(default)]
@@ -123,7 +126,9 @@ pub enum ConfigError {
     InvalidDomainUrl(String),
     #[error("重复线路域名: {0}")]
     DuplicateDomain(String),
-    #[error("test.download_file_path 必须以 / 开头且不能只写 /: {0}")]
+    #[error("缺少 [speedtest] 配置段")]
+    MissingSpeedtestSettings,
+    #[error("speedtest.download_file_path 必须以 / 开头且不能只写 /: {0}")]
     InvalidDownloadFilePath(String),
     #[error("历史记录默认查询数量不能大于最大查询数量")]
     InvalidHistoryLimit,
@@ -144,19 +149,28 @@ impl RuntimeConfig {
     }
 
     fn from_file_config(file_config: FileConfig) -> Result<Self, ConfigError> {
-        let domain_items = load_domain_items(&file_config.domains)?;
-        let test = file_config.test.normalized()?;
+        let FileConfig {
+            server,
+            database,
+            speedtest,
+            test,
+            history,
+            display,
+            domains,
+        } = file_config;
+        let domain_items = load_domain_items(&domains)?;
+        let test = select_file_test_settings(speedtest, test)?.normalized()?;
         let targets = build_targets(&domain_items, &test.download_file_path)?;
         if targets.is_empty() {
             return Err(ConfigError::NoDomains);
         }
 
         Ok(Self {
-            server: file_config.server,
-            database: file_config.database,
+            server,
+            database,
             test,
-            history: file_config.history.normalized()?,
-            display: file_config.display,
+            history: history.normalized()?,
+            display,
             targets,
         })
     }
@@ -181,6 +195,16 @@ impl Default for DatabaseConfig {
             path: PathBuf::from("speed_results.sqlite3"),
         }
     }
+}
+
+fn select_file_test_settings(
+    speedtest: Option<FileTestSettings>,
+    legacy_test: Option<FileTestSettings>,
+) -> Result<FileTestSettings, ConfigError> {
+    // 新配置段命名为 speedtest；保留 test 作为旧配置兼容入口，避免升级时配置立即失效。
+    speedtest
+        .or(legacy_test)
+        .ok_or(ConfigError::MissingSpeedtestSettings)
 }
 
 impl FileTestSettings {
@@ -425,7 +449,7 @@ mod tests {
     fn runtime_config_should_require_external_domain_file_path() {
         let result = RuntimeConfig::from_toml_str(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/speed.bin"
 
             [domains]
@@ -443,7 +467,7 @@ mod tests {
         ));
         let toml = format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/missing-domain-speed.bin"
 
             [domains]
@@ -468,7 +492,7 @@ mod tests {
         std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
         let toml = format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/empty-domain-speed.bin"
 
             [domains]
@@ -504,7 +528,7 @@ mod tests {
             host = "0.0.0.0"
             port = 52143
 
-            [test]
+            [speedtest]
             latency_rounds = 7
             latency_timeout_ms = 2200
             download_test_ms = 12000
@@ -530,6 +554,79 @@ mod tests {
     }
 
     #[test]
+    fn runtime_config_should_accept_legacy_test_section() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speedtest-legacy-test-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let config = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [test]
+            download_file_path = "/legacy-speed.bin"
+
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ))
+        .expect("legacy config should parse");
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert_eq!(
+            config.targets[0].download_url,
+            "https://a1.example.com/legacy-speed.bin"
+        );
+    }
+
+    #[test]
+    fn runtime_config_should_prefer_speedtest_section_over_legacy_test_section() {
+        let yaml_path = std::env::temp_dir().join(format!(
+            "web-speedtest-preferred-speedtest-domains-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(
+            &yaml_path,
+            r#"
+            domains:
+              - name: "a1 线路"
+                url: "https://a1.example.com"
+            "#,
+        )
+        .expect("yaml should be writable");
+
+        let config = RuntimeConfig::from_toml_str(&format!(
+            r#"
+            [test]
+            download_file_path = "/legacy-speed.bin"
+
+            [speedtest]
+            download_file_path = "/new-speed.bin"
+
+            [domains]
+            path = '{}'
+            "#,
+            yaml_path.display()
+        ))
+        .expect("config should parse");
+        let _ = std::fs::remove_file(&yaml_path);
+
+        assert_eq!(
+            config.targets[0].download_url,
+            "https://a1.example.com/new-speed.bin"
+        );
+    }
+
+    #[test]
     fn runtime_config_should_require_download_file_path_when_domains_exist() {
         let yaml_path = std::env::temp_dir().join(format!(
             "web-speedtest-missing-download-path-domains-{}.yaml",
@@ -547,7 +644,7 @@ mod tests {
 
         let result = RuntimeConfig::from_toml_str(&format!(
             r#"
-            [test]
+            [speedtest]
             latency_rounds = 2
 
             [domains]
@@ -578,7 +675,7 @@ mod tests {
 
         let result = RuntimeConfig::from_toml_str(&format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "speed.bin"
 
             [domains]
@@ -615,7 +712,7 @@ mod tests {
             default_limit = 40
             max_limit = 90
 
-            [test]
+            [speedtest]
             download_file_path = "/history-speed.bin"
 
             [domains]
@@ -651,7 +748,7 @@ mod tests {
             [display]
             show_domains = false
 
-            [test]
+            [speedtest]
             download_file_path = "/display-speed.bin"
 
             [domains]
@@ -687,7 +784,7 @@ mod tests {
             default_limit = 201
             max_limit = 200
 
-            [test]
+            [speedtest]
             download_file_path = "/invalid-history-speed.bin"
 
             [domains]
@@ -722,7 +819,7 @@ mod tests {
 
         let toml = format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/domain-speed.bin"
 
             [domains]
@@ -787,7 +884,7 @@ mod tests {
 
         let config = RuntimeConfig::from_toml_str(&format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/blacklist-speed.bin"
 
             [domains]
@@ -826,7 +923,7 @@ mod tests {
 
         let result = RuntimeConfig::from_toml_str(&format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/duplicate-speed.bin"
 
             [domains]
@@ -861,7 +958,7 @@ mod tests {
         std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
         let toml = format!(
             r#"
-            [test]
+            [speedtest]
             download_file_path = "/empty-source-speed.bin"
 
             [domains]
