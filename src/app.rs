@@ -447,7 +447,7 @@ mod tests {
         assert!(!html.contains("边缘节点"));
         assert!(!html.contains("searchParams.set(\"_\""));
         assert!(html.contains("https://myip.ipip.net/json"));
-        assert!(html.contains("/cdn-cgi/trace"));
+        assert!(html.contains("/meta"));
         assert!(html.contains("runLatencyRounds({ discardFirstRound: true })"));
         assert!(html.contains("https_jitter_ms"));
         assert!(html.contains("download_mbps"));
@@ -531,27 +531,29 @@ mod tests {
     }
 
     #[test]
-    fn embedded_index_html_should_compare_cloudflare_trace_client_ip() {
+    fn embedded_index_html_should_compare_client_meta_ip() {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("const CLOUDFLARE_TRACE_URL = \"/cdn-cgi/trace\";"),
-            "主页应从当前站点同源的 /cdn-cgi/trace 读取 Cloudflare Trace 信息"
+            html.contains("const CLIENT_META_URL = \"/meta\";")
+                && !html.contains("CLOUDFLARE_TRACE_URL")
+                && !html.contains("fetchCloudflareTraceInfo()"),
+            "主页应从当前站点同源的 /meta 读取客户端出口信息"
         );
         assert!(
             html.contains(
-                "<div class=\"info-label-group\">\n            <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>同用户IP不一致</span>\n            <span class=\"label\">用户 IP</span>\n          </div>"
+                "<span class=\"label\">用户 IP</span>\n          <div class=\"info-value-group\">\n            <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</span>\n            <span class=\"value\" id=\"client-ip\">正在检测</span>\n          </div>"
             )
                 && !html.contains(
-                    "</div>\n      <div class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>同用户IP不一致</div>\n\n      <div class=\"section-title\">"
+                    "</div>\n      <div class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</div>\n\n      <div class=\"section-title\">"
                 )
                 && html.contains(
                     "clientIpMismatchAlert: document.getElementById(\"client-ip-mismatch-alert\"),"
                 )
-                && html.contains(".info-label-group {")
+                && html.contains(".info-value-group {")
                 && html.contains(".client-ip-mismatch-alert {")
                 && html.contains(".client-ip-mismatch-alert[hidden] {"),
-            "红色异常标识应放在用户 IP 标签前面，不应占用用户信息和线路标题之间的夹层"
+            "红色异常标识应放在具体 IP 前面，不应放在用户 IP 标签前或夹层位置"
         );
         assert!(
             html.contains(".info-group {\n      background: var(--panel-bg);\n      border: 1px solid var(--border);\n      border-radius: 14px;\n      padding: 8px 16px;\n      margin-bottom: 16px;")
@@ -566,38 +568,56 @@ mod tests {
             "IP 来源不一致状态应集中保存，并同步到异常标识显示状态"
         );
         assert!(
-            html.contains("async function fetchCloudflareTraceInfo()")
+            html.contains("async function fetchClientMetaInfo()")
                 && html.contains(
-                    "const response = await fetch(CLOUDFLARE_TRACE_URL, { cache: \"no-store\" });"
+                    "const response = await fetch(CLIENT_META_URL, { cache: \"no-store\" });"
                 )
-                && html.contains("function parseCloudflareTrace(text)")
-                && html.contains("const separatorIndex = line.indexOf(\"=\");")
-                && html.contains("ip: cleanText(fields.ip),")
-                && html.contains("loc: cleanText(fields.loc),"),
-            "Cloudflare Trace 文本应按 key=value 解析出 ip 和 loc"
+                && html.contains("function parseIpLookupPayload(payload)")
+                && html.contains("const data = payload?.data || {};")
+                && html.contains("ip: String(data.ip).trim(),")
+                && html.contains("country: cleanText(location[0]),")
+                && html.contains("region: cleanText(location[1]),")
+                && html.contains("city: cleanText(location[2]),")
+                && html.contains("isp: cleanText(location[4]),"),
+            "/meta JSON 应按和 IPIP 基本一致的 data.location 格式解析完整地理信息"
         );
         assert!(
-            html.contains("function shouldUseCloudflareTraceInfo(publicIp, traceIp)")
+            html.contains("function shouldUseClientMetaInfo(publicIp, metaIp)")
                 && html.contains("function ipv4PrefixForComparison(value)")
                 && html.contains("return parts.slice(0, 2).join(\".\");")
                 && html.contains(
-                    "return Boolean(publicPrefix && tracePrefix && publicPrefix !== tracePrefix);"
+                    "return Boolean(publicPrefix && metaPrefix && publicPrefix !== metaPrefix);"
                 ),
             "只有双方都是 IPv4 且前两个段不一致时，才应判定为同用户 IP 不一致"
         );
         assert!(
             html.contains("fetchPublicIpInfo().catch(() => null),")
-                && html.contains("fetchCloudflareTraceInfo().catch(() => null),")
-                && html.contains("applyClientInfo(publicInfo, traceInfo);"),
-            "IPIP 和 Cloudflare Trace 查询应互不阻塞，最后统一合并展示结果"
+                && html.contains("fetchClientMetaInfo().catch(() => null),")
+                && html.contains("applyClientInfo(publicInfo, metaInfo);"),
+            "IPIP 和 /meta 查询应互不阻塞，最后统一合并展示结果"
         );
         assert!(
-            html.contains("const shouldUseTraceInfo = shouldUseCloudflareTraceInfo(publicInfo?.ip, traceInfo?.ip);")
-                && html.contains("state.currentClientIpMismatch = shouldUseTraceInfo;")
-                && html.contains("state.currentClientIp = traceInfo.ip;")
-                && html.contains("country: traceInfo.loc,")
-                && html.contains("isp: \"\","),
-            "IPv4 前缀不一致时，应切换主页用户 IP 和位置为 Cloudflare Trace 来源"
+            html.contains(
+                "const shouldUseMetaInfo = shouldUseClientMetaInfo(publicInfo?.ip, metaInfo?.ip);"
+            ) && html.contains("state.currentClientIpMismatch = shouldUseMetaInfo;")
+                && html.contains("state.currentClientIp = metaInfo.ip;")
+                && html.contains("state.currentIpInfo = metaInfo.info;"),
+            "IPv4 前缀不一致时，应切换主页用户 IP 和完整地理信息为 /meta 来源"
+        );
+        assert!(
+            html.contains("function buildResultPayload(targetKey, speed, isFinal)")
+                && html.contains("client_ip: state.currentClientIp || null,")
+                && html.contains("ip_country: state.currentIpInfo.country || null,")
+                && html.contains("ip_region: state.currentIpInfo.region || null,")
+                && html.contains("ip_city: state.currentIpInfo.city || null,")
+                && html.contains("ip_isp: state.currentIpInfo.isp || null,"),
+            "测速保存 payload 应直接使用异常切换后的当前客户端 IP 和地理信息"
+        );
+        assert!(
+            html.contains("const parsed = parseIpLookupPayload(JSON.parse(raw));")
+                && html.contains("colo: parsed.colo,")
+                && html.contains("兼容尚未升级到 /meta JSON 的旧线路节点"),
+            "线路延迟检测应能从 /meta JSON 中读取 colo，同时保留旧 key=value 兼容"
         );
     }
 

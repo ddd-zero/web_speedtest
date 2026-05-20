@@ -286,11 +286,13 @@
       border-bottom: none;
     }
 
-    .info-label-group {
+    .info-value-group {
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      justify-content: flex-end;
       min-width: 0;
+      max-width: 72%;
     }
 
     .label {
@@ -308,6 +310,11 @@
       font-size: .88rem;
       font-weight: 700;
       line-height: 1.4;
+    }
+
+    .info-value-group .value {
+      max-width: none;
+      min-width: 0;
     }
 
     .section-title {
@@ -1467,11 +1474,11 @@
 
       <div class="info-group">
         <div class="info-row">
-          <div class="info-label-group">
+          <span class="label">用户 IP</span>
+          <div class="info-value-group">
             <span class="client-ip-mismatch-alert" id="client-ip-mismatch-alert" hidden>IP异常，请检查分流</span>
-            <span class="label">用户 IP</span>
+            <span class="value" id="client-ip">正在检测</span>
           </div>
-          <span class="value" id="client-ip">正在检测</span>
         </div>
         <div class="info-row">
           <span class="label">位置</span>
@@ -1558,7 +1565,7 @@
   <script>
     const SMOOTHING = 0.3;
     const IP_LOOKUP_URL = "https://myip.ipip.net/json";
-    const CLOUDFLARE_TRACE_URL = "/cdn-cgi/trace";
+    const CLIENT_META_URL = "/meta";
     const MAX_CONSECUTIVE_LATENCY_FAILURES = 3;
     const ONE_CLICK_DOWNLOAD_TEST_MS = 6000;
     const HISTORY_OPEN_ANIMATION_MS = 300;
@@ -1737,11 +1744,11 @@
 
     async function loadClientInfo() {
       try {
-        const [publicInfo, traceInfo] = await Promise.all([
+        const [publicInfo, metaInfo] = await Promise.all([
           fetchPublicIpInfo().catch(() => null),
-          fetchCloudflareTraceInfo().catch(() => null),
+          fetchClientMetaInfo().catch(() => null),
         ]);
-        applyClientInfo(publicInfo, traceInfo);
+        applyClientInfo(publicInfo, metaInfo);
       } catch (error) {
         state.currentClientIp = "";
         state.currentIpInfo = {
@@ -1760,6 +1767,17 @@
       const response = await fetch(IP_LOOKUP_URL, { cache: "no-store" });
       if (!response.ok) throw new Error(`IP 查询失败: ${response.status}`);
       const payload = await response.json();
+      return parseIpLookupPayload(payload);
+    }
+
+    async function fetchClientMetaInfo() {
+      const response = await fetch(CLIENT_META_URL, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Meta 查询失败: ${response.status}`);
+      const payload = await response.json();
+      return parseIpLookupPayload(payload);
+    }
+
+    function parseIpLookupPayload(payload) {
       const data = payload?.data || {};
       const location = Array.isArray(data.location) ? data.location : [];
       if (payload?.ret !== "ok" || !data.ip) throw new Error("IP 查询失败");
@@ -1772,45 +1790,17 @@
           city: cleanText(location[2]),
           isp: cleanText(location[4]),
         },
+        colo: cleanText(data.colo),
       };
     }
 
-    async function fetchCloudflareTraceInfo() {
-      const response = await fetch(CLOUDFLARE_TRACE_URL, { cache: "no-store" });
-      if (!response.ok) throw new Error(`Trace 查询失败: ${response.status}`);
-      const trace = parseCloudflareTrace(await response.text());
-      if (!trace.ip) throw new Error("Trace 查询失败");
-      return trace;
-    }
+    function applyClientInfo(publicInfo, metaInfo) {
+      const shouldUseMetaInfo = shouldUseClientMetaInfo(publicInfo?.ip, metaInfo?.ip);
+      state.currentClientIpMismatch = shouldUseMetaInfo;
 
-    function parseCloudflareTrace(text) {
-      const fields = {};
-      cleanText(text).split(/\r?\n/).forEach(line => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex <= 0) return;
-        const key = cleanText(line.slice(0, separatorIndex));
-        if (!key) return;
-        fields[key] = line.slice(separatorIndex + 1).trim();
-      });
-      return {
-        ip: cleanText(fields.ip),
-        loc: cleanText(fields.loc),
-        colo: cleanText(fields.colo),
-      };
-    }
-
-    function applyClientInfo(publicInfo, traceInfo) {
-      const shouldUseTraceInfo = shouldUseCloudflareTraceInfo(publicInfo?.ip, traceInfo?.ip);
-      state.currentClientIpMismatch = shouldUseTraceInfo;
-
-      if (shouldUseTraceInfo) {
-        state.currentClientIp = traceInfo.ip;
-        state.currentIpInfo = {
-          country: traceInfo.loc,
-          region: "",
-          city: "",
-          isp: "",
-        };
+      if (shouldUseMetaInfo) {
+        state.currentClientIp = metaInfo.ip;
+        state.currentIpInfo = metaInfo.info;
         return;
       }
 
@@ -1820,14 +1810,9 @@
         return;
       }
 
-      if (traceInfo) {
-        state.currentClientIp = traceInfo.ip;
-        state.currentIpInfo = {
-          country: traceInfo.loc,
-          region: "",
-          city: "",
-          isp: "",
-        };
+      if (metaInfo) {
+        state.currentClientIp = metaInfo.ip;
+        state.currentIpInfo = metaInfo.info;
         return;
       }
 
@@ -2697,10 +2682,10 @@
       return ip;
     }
 
-    function shouldUseCloudflareTraceInfo(publicIp, traceIp) {
+    function shouldUseClientMetaInfo(publicIp, metaIp) {
       const publicPrefix = ipv4PrefixForComparison(publicIp);
-      const tracePrefix = ipv4PrefixForComparison(traceIp);
-      return Boolean(publicPrefix && tracePrefix && publicPrefix !== tracePrefix);
+      const metaPrefix = ipv4PrefixForComparison(metaIp);
+      return Boolean(publicPrefix && metaPrefix && publicPrefix !== metaPrefix);
     }
 
     function ipv4PrefixForComparison(value) {
@@ -2834,6 +2819,18 @@
     }
 
     function parseTrace(text) {
+      const raw = cleanText(text);
+      try {
+        const parsed = parseIpLookupPayload(JSON.parse(raw));
+        return {
+          ip: parsed.ip,
+          loc: parsed.info.country,
+          colo: parsed.colo,
+        };
+      } catch (error) {
+        // 兼容尚未升级到 /meta JSON 的旧线路节点。
+      }
+
       return text.trim().split("\n").reduce((acc, line) => {
         const index = line.indexOf("=");
         if (index > 0) {
