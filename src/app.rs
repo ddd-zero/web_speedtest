@@ -548,7 +548,7 @@ mod tests {
         );
         assert!(
             html.contains(
-                "<span class=\"label\">用户 IP</span>\n          <div class=\"info-value-group\">\n            <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</span>\n            <span class=\"value\" id=\"client-ip\">正在检测</span>\n          </div>"
+                "<div class=\"info-row client-ip-row\">\n          <span class=\"label\">用户 IP</span>\n          <span class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</span>\n          <span class=\"value client-ip-value\" id=\"client-ip\">正在检测</span>\n        </div>"
             )
                 && !html.contains(
                     "</div>\n      <div class=\"client-ip-mismatch-alert\" id=\"client-ip-mismatch-alert\" hidden>IP异常，请检查分流</div>\n\n      <div class=\"section-title\">"
@@ -556,10 +556,14 @@ mod tests {
                 && html.contains(
                     "clientIpMismatchAlert: document.getElementById(\"client-ip-mismatch-alert\"),"
                 )
-                && html.contains(".info-value-group {")
+                && html.contains(".client-ip-row {\n      display: grid;")
+                && html.contains("grid-template-columns: auto minmax(0, 1fr) max-content;")
                 && html.contains(".client-ip-mismatch-alert {")
+                && html.contains(".client-ip-value {\n      max-width: none;")
+                && html.contains("white-space: nowrap;")
+                && html.contains("word-break: normal;")
                 && html.contains(".client-ip-mismatch-alert[hidden] {"),
-            "红色异常标识应放在具体 IP 前面，不应放在用户 IP 标签前或夹层位置"
+            "红色异常标识应作为用户 IP 行的中间列，具体 IP 应保持单行优先"
         );
         assert!(
             html.contains(".info-group {\n      background: var(--panel-bg);\n      border: 1px solid var(--border);\n      border-radius: 14px;\n      padding: 8px 16px;\n      margin-bottom: 16px;")
