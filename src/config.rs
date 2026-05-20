@@ -51,7 +51,7 @@ struct FileTestSettings {
     latency_timeout_ms: u64,
     #[serde(default = "default_download_test_ms")]
     download_test_ms: u64,
-    download_file_path: Option<String>,
+    download_file_path: String,
     #[serde(default = "default_progress_save_ratio")]
     progress_save_ratio: f64,
 }
@@ -67,25 +67,23 @@ pub struct DisplaySettings {
     pub show_domains: bool,
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct FileConfig {
     #[serde(default)]
     server: ServerConfig,
     #[serde(default)]
     database: DatabaseConfig,
-    #[serde(default)]
     test: FileTestSettings,
     #[serde(default)]
     history: HistorySettings,
     #[serde(default)]
     display: DisplaySettings,
-    #[serde(default)]
     domains: DomainConfig,
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct DomainConfig {
-    path: Option<PathBuf>,
+    path: PathBuf,
     #[serde(default)]
     blacklist: Vec<String>,
     #[serde(default)]
@@ -113,8 +111,6 @@ pub enum ConfigError {
     Io(#[from] std::io::Error),
     #[error("配置文件不存在: {}", .0.display())]
     MissingConfig(PathBuf),
-    #[error("domains.path 未配置，无法读取外部线路文件")]
-    MissingDomainPath,
     #[error("外部线路文件不存在: {}", .0.display())]
     MissingDomainFile(PathBuf),
     #[error("TOML 配置解析失败: {0}")]
@@ -127,8 +123,6 @@ pub enum ConfigError {
     InvalidDomainUrl(String),
     #[error("重复线路域名: {0}")]
     DuplicateDomain(String),
-    #[error("test.download_file_path 未配置，无法生成下载测速 URL")]
-    MissingDownloadFilePath,
     #[error("test.download_file_path 必须以 / 开头且不能只写 /: {0}")]
     InvalidDownloadFilePath(String),
     #[error("历史记录默认查询数量不能大于最大查询数量")]
@@ -189,25 +183,13 @@ impl Default for DatabaseConfig {
     }
 }
 
-impl Default for FileTestSettings {
-    fn default() -> Self {
-        Self {
-            latency_rounds: default_latency_rounds(),
-            latency_timeout_ms: default_latency_timeout_ms(),
-            download_test_ms: default_download_test_ms(),
-            download_file_path: None,
-            progress_save_ratio: default_progress_save_ratio(),
-        }
-    }
-}
-
 impl FileTestSettings {
     fn normalized(self) -> Result<TestSettings, ConfigError> {
         Ok(TestSettings {
             latency_rounds: self.latency_rounds.clamp(1, 20),
             latency_timeout_ms: self.latency_timeout_ms.clamp(300, 30_000),
             download_test_ms: self.download_test_ms.clamp(1_000, 120_000),
-            download_file_path: normalize_download_file_path(self.download_file_path.as_deref())?,
+            download_file_path: normalize_download_file_path(&self.download_file_path)?,
             progress_save_ratio: self.progress_save_ratio.clamp(0.05, 0.95),
         })
     }
@@ -262,7 +244,7 @@ impl Default for DisplaySettings {
 }
 
 fn load_domain_items(config: &DomainConfig) -> Result<Vec<DomainItem>, ConfigError> {
-    let path = config.path.as_ref().ok_or(ConfigError::MissingDomainPath)?;
+    let path = &config.path;
     if !path.is_file() {
         return Err(ConfigError::MissingDomainFile(path.clone()));
     }
@@ -363,12 +345,10 @@ fn build_targets(
         .collect()
 }
 
-fn normalize_download_file_path(value: Option<&str>) -> Result<String, ConfigError> {
-    let Some(path) = non_empty_string(value) else {
-        return Err(ConfigError::MissingDownloadFilePath);
-    };
+fn normalize_download_file_path(value: &str) -> Result<String, ConfigError> {
+    let path = value.trim();
     // 下载文件路径只描述站内路径，线路域名仍由 domains.url 决定，避免配置成完整 URL 后绕过线路。
-    if !path.starts_with('/') || path == "/" {
+    if path.is_empty() || !path.starts_with('/') || path == "/" {
         return Err(ConfigError::InvalidDownloadFilePath(path.to_string()));
     }
     Ok(path.to_string())
@@ -445,13 +425,14 @@ mod tests {
     fn runtime_config_should_require_external_domain_file_path() {
         let result = RuntimeConfig::from_toml_str(
             r#"
-            [server]
-            host = "127.0.0.1"
-            port = 3000
+            [test]
+            download_file_path = "/speed.bin"
+
+            [domains]
             "#,
         );
 
-        assert!(matches!(result, Err(ConfigError::MissingDomainPath)));
+        assert!(matches!(result, Err(ConfigError::Toml(_))));
     }
 
     #[test]
@@ -462,6 +443,9 @@ mod tests {
         ));
         let toml = format!(
             r#"
+            [test]
+            download_file_path = "/missing-domain-speed.bin"
+
             [domains]
             path = '{}'
             "#,
@@ -484,6 +468,9 @@ mod tests {
         std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
         let toml = format!(
             r#"
+            [test]
+            download_file_path = "/empty-domain-speed.bin"
+
             [domains]
             path = '{}'
             "#,
@@ -560,6 +547,9 @@ mod tests {
 
         let result = RuntimeConfig::from_toml_str(&format!(
             r#"
+            [test]
+            latency_rounds = 2
+
             [domains]
             path = '{}'
             "#,
@@ -567,7 +557,7 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&yaml_path);
 
-        assert!(matches!(result, Err(ConfigError::MissingDownloadFilePath)));
+        assert!(matches!(result, Err(ConfigError::Toml(_))));
     }
 
     #[test]
@@ -871,6 +861,9 @@ mod tests {
         std::fs::write(&yaml_path, "domains: []").expect("yaml should be writable");
         let toml = format!(
             r#"
+            [test]
+            download_file_path = "/empty-source-speed.bin"
+
             [domains]
             path = '{}'
             "#,

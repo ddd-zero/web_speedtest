@@ -2833,24 +2833,12 @@
 
     function parseTrace(text) {
       const raw = cleanText(text);
-      try {
-        const parsed = parseIpLookupPayload(JSON.parse(raw));
-        return {
-          ip: parsed.ip,
-          loc: parsed.info.country,
-          colo: parsed.colo,
-        };
-      } catch (error) {
-        // 兼容尚未升级到 /meta JSON 的旧线路节点。
-      }
-
-      return text.trim().split("\n").reduce((acc, line) => {
-        const index = line.indexOf("=");
-        if (index > 0) {
-          acc[line.slice(0, index)] = line.slice(index + 1);
-        }
-        return acc;
-      }, {});
+      const parsed = parseIpLookupPayload(JSON.parse(raw));
+      return {
+        ip: parsed.ip,
+        loc: parsed.info.country,
+        colo: parsed.colo,
+      };
     }
 
     function summarizeLatency(samples) {

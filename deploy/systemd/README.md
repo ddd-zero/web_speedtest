@@ -43,4 +43,4 @@ sudo systemctl restart web_speedtest.service
 WEB_SPEEDTEST_CONFIG=/etc/web_speedtest/config.toml
 ```
 
-`EnvironmentFile=-/etc/default/web_speedtest` 中的短横线表示文件不存在时不阻止服务启动。程序仍兼容旧的 `WEB_SPEED_CONFIG`，方便已有部署平滑迁移。
+`EnvironmentFile=-/etc/default/web_speedtest` 中的短横线表示文件不存在时不阻止服务启动。

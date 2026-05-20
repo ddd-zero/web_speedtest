@@ -29,7 +29,6 @@ use crate::{
 
 const IN_MEMORY_UPDATE_TOKEN_TTL_SECS: i64 = 30;
 const CONFIG_PATH_ENV: &str = "WEB_SPEEDTEST_CONFIG";
-const LEGACY_CONFIG_PATH_ENV: &str = "WEB_SPEED_CONFIG";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -143,9 +142,7 @@ pub async fn serve() -> Result<(), AppError> {
 }
 
 fn resolve_config_path_from_env(mut read_env: impl FnMut(&str) -> Option<String>) -> PathBuf {
-    // 新变量跟随项目名；保留旧变量是为了让已有部署升级后仍能找到配置文件。
     read_env(CONFIG_PATH_ENV)
-        .or_else(|| read_env(LEGACY_CONFIG_PATH_ENV))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("config.toml"))
 }
@@ -342,7 +339,7 @@ mod tests {
 
     #[test]
     fn exit_code_for_error_should_return_config_code_for_domain_config_errors() {
-        let error = AppError::Config(ConfigError::MissingDomainPath);
+        let error = AppError::Config(ConfigError::InvalidHistoryLimit);
 
         let code = exit_code_for_error(&error);
 
@@ -353,21 +350,10 @@ mod tests {
     fn config_path_should_prefer_current_project_env_var() {
         let path = super::resolve_config_path_from_env(|name| match name {
             "WEB_SPEEDTEST_CONFIG" => Some("new-config.toml".to_string()),
-            "WEB_SPEED_CONFIG" => Some("legacy-config.toml".to_string()),
             _ => None,
         });
 
         assert_eq!(path, PathBuf::from("new-config.toml"));
-    }
-
-    #[test]
-    fn config_path_should_fallback_to_legacy_env_var() {
-        let path = super::resolve_config_path_from_env(|name| match name {
-            "WEB_SPEED_CONFIG" => Some("legacy-config.toml".to_string()),
-            _ => None,
-        });
-
-        assert_eq!(path, PathBuf::from("legacy-config.toml"));
     }
 
     #[test]
@@ -541,9 +527,7 @@ mod tests {
         let html = super::embedded_index_html();
 
         assert!(
-            html.contains("const CLIENT_META_URL = \"/meta\";")
-                && !html.contains("CLOUDFLARE_TRACE_URL")
-                && !html.contains("fetchCloudflareTraceInfo()"),
+            html.contains("const CLIENT_META_URL = \"/meta\";"),
             "主页应从当前站点同源的 /meta 读取客户端出口信息"
         );
         assert!(
@@ -625,9 +609,8 @@ mod tests {
         );
         assert!(
             html.contains("const parsed = parseIpLookupPayload(JSON.parse(raw));")
-                && html.contains("colo: parsed.colo,")
-                && html.contains("兼容尚未升级到 /meta JSON 的旧线路节点"),
-            "线路延迟检测应能从 /meta JSON 中读取 colo，同时保留旧 key=value 兼容"
+                && html.contains("colo: parsed.colo,"),
+            "线路延迟检测应只解析 /meta JSON"
         );
     }
 
