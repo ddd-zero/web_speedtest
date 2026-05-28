@@ -1610,13 +1610,45 @@ mod tests {
                 && html.contains(
                     "<td class=\"col-time\">${renderHistoryTimeCell(record, options)}</td>"
                 )
-                && html.contains("if (!options.group) return formatTime(record.created_at);")
+                && html.contains(".history-time-cell {\n      display: inline-grid;")
+                && html.contains("grid-template-columns: var(--history-time-columns);")
+                && html.contains("return `<span class=\"history-time-cell\">")
+                && html.contains("return `<button class=\"history-group-toggle\"")
+                && html.contains("<span class=\"history-time-value\">${formatTime(record.created_at)}</span>")
                 && html.contains(".col-time {\n      font-family: var(--mono-stack);\n      white-space: nowrap;\n    }"),
-            "历史记录时间列应有语义 class 并禁止换行"
+            "历史记录时间列应有语义 class，并让普通行、子行、分组行共用同一套时间网格"
+        );
+        assert!(
+            html.contains(
+                ".history-table thead .col-time {\n      padding-left: calc(8px + var(--history-time-marker-size) + var(--history-time-gap));\n    }"
+            ) && html.contains(".history-time-marker,\n    .history-group-arrow {")
+                && html.contains("width: var(--history-time-marker-size);")
+                && html.contains("height: var(--history-time-marker-size);"),
+            "时间表头、普通行、子行和分组行标记位应预留同样宽度，避免展开后时间起点漂移"
+        );
+        assert!(
+            html.contains(".history-time-marker-child {\n      width: 6px;")
+                && html.contains("background: rgba(134, 146, 166, .42);")
+                && html.contains(".history-time-marker-single {\n      box-sizing: border-box;")
+                && html.contains("border: 2px solid rgba(218, 119, 86, .32);"),
+            "子行短横、单条圆点和分组箭头应使用统一但有层级差异的时间轴标记风格"
         );
         assert!(
             !html.contains("padding: clamp(8px, 1.1vw, 10px);"),
             "历史记录不应再用随宽度变化的 padding 影响行高"
+        );
+    }
+
+    #[test]
+    fn embedded_index_html_should_make_single_history_rows_read_as_records() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("if (!options.isChild && !options.group) rowClasses.push(\"history-single-row\");")
+                && html.contains(".history-single-row {\n      --history-row-bg: #fffdfa;")
+                && html.contains("--history-row-hover-bg: #fff7f1;")
+                && html.contains(".history-single-row .history-time-value {\n      color: #3f342e;\n      font-weight: 700;\n    }"),
+            "单条测速记录应有轻量分层和更明确的时间文字，避免在表格里显得孤立"
         );
     }
 

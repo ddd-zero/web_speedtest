@@ -830,6 +830,9 @@
 
     .history-table {
       --history-grid-columns: repeat(5, max-content);
+      --history-time-gap: 6px;
+      --history-time-marker-size: 14px;
+      --history-time-columns: var(--history-time-marker-size) max-content max-content;
       width: max-content;
       min-width: 100%;
       display: grid;
@@ -924,6 +927,10 @@
       min-height: 54px;
     }
 
+    .history-table thead .col-time {
+      padding-left: calc(8px + var(--history-time-marker-size) + var(--history-time-gap));
+    }
+
     .history-table .col-domain,
     .history-table .col-network {
       padding-left: clamp(8px, 1.55vw, 14px);
@@ -940,6 +947,46 @@
     .col-time {
       font-family: var(--mono-stack);
       white-space: nowrap;
+    }
+
+    .history-time-cell {
+      display: inline-grid;
+      grid-template-columns: var(--history-time-columns);
+      column-gap: var(--history-time-gap);
+      align-items: center;
+      min-width: max-content;
+      line-height: 1.2;
+    }
+
+    .history-time-value {
+      grid-column: 2;
+    }
+
+    .history-time-marker,
+    .history-group-arrow {
+      grid-column: 1;
+      display: inline-grid;
+      place-items: center;
+      justify-self: center;
+      width: var(--history-time-marker-size);
+      height: var(--history-time-marker-size);
+    }
+
+    .history-time-marker-single {
+      box-sizing: border-box;
+      width: 8px;
+      height: 8px;
+      border: 2px solid rgba(218, 119, 86, .32);
+      border-radius: 999px;
+      background: #fffdf9;
+      box-shadow: 0 0 0 2px rgba(218, 119, 86, .07);
+    }
+
+    .history-time-marker-child {
+      width: 6px;
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(134, 146, 166, .42);
     }
 
     .col-speed-header {
@@ -1092,6 +1139,17 @@
       --history-row-ring: transparent;
     }
 
+    .history-single-row {
+      --history-row-bg: #fffdfa;
+      --history-row-hover-bg: #fff7f1;
+      --history-row-border: #f1e9e1;
+    }
+
+    .history-single-row .history-time-value {
+      color: #3f342e;
+      font-weight: 700;
+    }
+
     .history-table tbody .history-record-row::before {
       content: "";
       grid-column: 1 / -1;
@@ -1153,15 +1211,16 @@
     }
 
     .history-group-toggle {
-      display: inline-flex;
+      display: inline-grid;
+      grid-template-columns: var(--history-time-columns);
+      column-gap: var(--history-time-gap);
       align-items: center;
-      gap: 6px;
       margin: -3px 0;
-      padding: 4px 6px;
+      padding: 4px 0;
       border-radius: 8px;
       color: inherit;
       background: transparent;
-      border: 1px solid transparent;
+      border: none;
       box-shadow: none;
       font-family: var(--mono-stack);
       font-size: .78rem;
@@ -1181,8 +1240,9 @@
     }
 
     .history-group-arrow {
-      display: inline-block;
       color: var(--accent);
+      font-size: .76rem;
+      line-height: 1;
       transition: transform .16s ease;
     }
 
@@ -1192,6 +1252,7 @@
 
     .history-group-count {
       display: inline-flex;
+      grid-column: 3;
       align-items: center;
       justify-content: center;
       min-width: 20px;
@@ -1212,6 +1273,10 @@
 
     .history-child-row .col-time {
       color: var(--text-sub);
+    }
+
+    .history-child-row .history-time-value {
+      font-weight: 600;
     }
 
     @media (hover: hover) {
@@ -2264,6 +2329,7 @@
       const rowClasses = ["history-record-row"];
       if (options.isChild) rowClasses.push("history-child-row");
       if (options.group) rowClasses.push("history-group-row");
+      if (!options.isChild && !options.group) rowClasses.push("history-single-row");
       const groupAttrs = options.group ? ` data-history-group-row data-history-group-key="${escapeHtml(options.group.key)}" aria-expanded="${Boolean(options.expanded)}"` : "";
       return `<tr class="${rowClasses.join(" ")}" style="--history-row:${options.rowIndex};"${groupAttrs}>
         <td class="col-time">${renderHistoryTimeCell(record, options)}</td>
@@ -2280,14 +2346,20 @@
     }
 
     function renderHistoryTimeCell(record, options) {
-      if (!options.group) return formatTime(record.created_at);
+      if (!options.group) {
+        const markerClass = options.isChild ? "history-time-marker-child" : "history-time-marker-single";
+        return `<span class="history-time-cell">
+          <span class="history-time-marker ${markerClass}" aria-hidden="true"></span>
+          <span class="history-time-value">${formatTime(record.created_at)}</span>
+        </span>`;
+      }
 
       const group = options.group;
       const expanded = Boolean(options.expanded);
       const label = expanded ? "收起" : "展开";
       return `<button class="history-group-toggle" type="button" data-history-group-toggle data-history-group-key="${escapeHtml(group.key)}" aria-expanded="${expanded}" aria-label="${label} ${escapeHtml(group.key)} 的 ${group.records.length} 条测速记录">
         <span class="history-group-arrow" aria-hidden="true">›</span>
-        <span>${formatTime(record.created_at)}</span>
+        <span class="history-time-value">${formatTime(record.created_at)}</span>
         <span class="history-group-count">${group.records.length}</span>
       </button>`;
     }
