@@ -1564,6 +1564,21 @@ mod tests {
     }
 
     #[test]
+    fn embedded_index_html_should_compact_history_toolbar_before_mobile_layout() {
+        let html = super::embedded_index_html();
+
+        assert!(
+            html.contains("@media (max-width: 820px) and (min-width: 641px) {")
+                && html.contains(
+                    "grid-template-columns: minmax(132px, 200px) minmax(0, 1fr) auto auto;"
+                )
+                && html.contains(".search-input,\n      .search-select {\n        padding: 9px 10px;\n        font-size: .84rem;\n      }")
+                && html.contains("#query-history-btn {\n        padding-inline: 12px;\n      }"),
+            "历史筛选条应在平板窄宽度先压缩控件和字号，避免搜索提示在进入手机布局前被截断"
+        );
+    }
+
+    #[test]
     fn embedded_index_html_should_open_history_modal_without_delayed_feedback() {
         let html = super::embedded_index_html();
 
