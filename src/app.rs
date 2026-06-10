@@ -1669,7 +1669,7 @@ mod tests {
             "时间表头、普通行、子行和分组行标记位应预留同样宽度，避免展开后时间起点漂移"
         );
         assert!(
-            html.contains(".history-time-marker-child {\n      width: 9px;")
+            html.contains(".history-time-marker-child {\n      width: 7px;")
                 && html.contains("background: rgba(134, 146, 166, .5);")
                 && html.contains(".history-time-marker-single {\n      box-sizing: border-box;")
                 && html.contains("border: 2px solid rgba(218, 119, 86, .32);"),
@@ -1689,7 +1689,7 @@ mod tests {
             html.contains("if (!options.isChild && !options.group) rowClasses.push(\"history-single-row\");")
                 && html.contains(".history-single-row {\n      --history-row-bg: #fffdfa;")
                 && html.contains("--history-row-hover-bg: #fff7f1;")
-                && html.contains(".history-single-row .history-time-value {\n      color: #3f342e;\n      font-weight: 700;\n    }"),
+                && html.contains(".history-single-row .history-time-value {\n      color: #3f342e;\n      font-weight: 600;\n    }"),
             "单条测速记录应有轻量分层和更明确的时间文字，避免在表格里显得孤立"
         );
     }
