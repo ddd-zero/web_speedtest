@@ -1669,8 +1669,8 @@ mod tests {
             "时间表头、普通行、子行和分组行标记位应预留同样宽度，避免展开后时间起点漂移"
         );
         assert!(
-            html.contains(".history-time-marker-child {\n      width: 6px;")
-                && html.contains("background: rgba(134, 146, 166, .42);")
+            html.contains(".history-time-marker-child {\n      width: 9px;")
+                && html.contains("background: rgba(134, 146, 166, .5);")
                 && html.contains(".history-time-marker-single {\n      box-sizing: border-box;")
                 && html.contains("border: 2px solid rgba(218, 119, 86, .32);"),
             "子行短横、单条圆点和分组箭头应使用统一但有层级差异的时间轴标记风格"

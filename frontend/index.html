@@ -856,8 +856,8 @@
 
     .history-table {
       --history-grid-columns: repeat(5, max-content);
-      --history-time-gap: 6px;
-      --history-time-marker-size: 14px;
+      --history-time-gap: 8px;
+      --history-time-marker-size: 16px;
       --history-time-columns: var(--history-time-marker-size) max-content max-content;
       width: max-content;
       min-width: 100%;
@@ -1000,19 +1000,19 @@
 
     .history-time-marker-single {
       box-sizing: border-box;
-      width: 8px;
-      height: 8px;
+      width: 9px;
+      height: 9px;
       border: 2px solid rgba(218, 119, 86, .32);
       border-radius: 999px;
       background: #fffdf9;
-      box-shadow: 0 0 0 2px rgba(218, 119, 86, .07);
+      box-shadow: 0 0 0 3px rgba(218, 119, 86, .06);
     }
 
     .history-time-marker-child {
-      width: 6px;
-      height: 2px;
+      width: 9px;
+      height: 1.5px;
       border-radius: 999px;
-      background: rgba(134, 146, 166, .42);
+      background: rgba(134, 146, 166, .5);
     }
 
     .col-speed-header {
@@ -1173,7 +1173,7 @@
 
     .history-single-row .history-time-value {
       color: #3f342e;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     .history-table tbody .history-record-row::before {
@@ -1302,7 +1302,9 @@
     }
 
     .history-child-row .history-time-value {
-      font-weight: 600;
+      font-size: .8rem;
+      font-weight: 500;
+      color: #8a8077;
     }
 
     @media (hover: hover) {
@@ -2284,6 +2286,8 @@
         if (!response.ok) throw new Error("记录加载失败");
         const records = await response.json();
         state.historyRecords = records;
+        // 新查询结果回到全部折叠的初始态，并清掉上次查询遗留的展开 key，避免僵尸状态累积。
+        state.expandedHistoryGroups.clear();
         renderHistory();
       } catch (error) {
         state.historyRecords = [];
@@ -2328,7 +2332,7 @@
               <span class="history-network-ip">${escapeHtml(record.client_ip || "未知")}</span>
               <span class="history-network-meta">
                 <span class="history-network-location">${escapeHtml(historyNetworkText(record) || "未知")}</span>
-                <span class="target-colo history-network-colo">${escapeHtml(cleanText(record.colo))}</span>
+                ${renderHistoryColoBadge(record)}
               </span>
             `).join("")}
           </div>
