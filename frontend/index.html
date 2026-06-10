@@ -2121,12 +2121,19 @@
       let lastTime = performance.now();
       let savePromise = null;
       let savedRecord = null;
+      let timedOut = false;
 
       resetDownloadUi(targetKey);
       renderTargetList();
 
       const controller = new AbortController();
       state.downloadController = controller;
+      // 抢占式硬超时：正常循环会在 elapsed >= downloadTestMs 时退出，这里多留 2 秒余量，
+      // 仅用于线路发完响应头后挂住不发 body 也不关连接时强制中止，避免 reader.read() 无限挂起。
+      const hardTimeout = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, downloadTestMs + 2000);
       const started = performance.now();
       try {
         const response = await fetch(target.download_url, {
@@ -2180,9 +2187,11 @@
       } catch (error) {
         const message = state.stopRequested
           ? "测速已停止"
-          : error instanceof TypeError
-            ? "下载失败：测速文件可能缺少跨域响应头"
-            : error.message;
+          : timedOut
+            ? "测速超时：线路响应中断"
+            : error instanceof TypeError
+              ? "下载失败：测速文件可能缺少跨域响应头"
+              : error.message;
         updateDownloadMessage(targetKey, message);
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
@@ -2190,6 +2199,7 @@
         await finalizeResult(targetKey, stableSpeed(speedSamples), savedRecord, Boolean(savePromise)).catch(() => null);
         markDownloadFailed(targetKey, stableSpeed(speedSamples), receivedBytes, message);
       } finally {
+        window.clearTimeout(hardTimeout);
         controller.abort();
         state.isDownloading = false;
         state.activeTargetKey = null;
