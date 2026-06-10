@@ -214,7 +214,7 @@ impl FileTestSettings {
             latency_timeout_ms: self.latency_timeout_ms.clamp(300, 30_000),
             download_test_ms: self.download_test_ms.clamp(1_000, 120_000),
             download_file_path: normalize_download_file_path(&self.download_file_path)?,
-            progress_save_ratio: self.progress_save_ratio.clamp(0.05, 0.95),
+            progress_save_ratio: self.progress_save_ratio.clamp(0.3, 0.95),
         })
     }
 }

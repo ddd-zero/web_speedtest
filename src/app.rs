@@ -27,7 +27,8 @@ use crate::{
     store::{QueryFilter, SaveResultInput, SpeedStore, StoreError},
 };
 
-const IN_MEMORY_UPDATE_TOKEN_TTL_SECS: i64 = 30;
+/// 更新令牌存活时间的底线值。实际 TTL 会根据测速配置推导，但不会低于这个秒数，
+/// 以便短测速也留出网络和处理余量。
 const CONFIG_PATH_ENV: &str = "WEB_SPEEDTEST_CONFIG";
 
 #[derive(Clone)]
@@ -114,11 +115,19 @@ pub struct ClientConfig {
     pub display: DisplaySettings,
 }
 
+/// 令牌存活时间应覆盖「中段保存 → 最终保存」的最长间隔。
+/// 该间隔约等于 download_test_ms × (1 - progress_save_ratio)，再乘 1.2 留网络与处理余量。
+fn update_token_ttl_secs(test: &TestSettings) -> i64 {
+    let interval_ms = test.download_test_ms as f64 * (1.0 - test.progress_save_ratio);
+    ((interval_ms * 1.2) / 1000.0).ceil() as i64
+}
+
 pub fn build_router(store: SpeedStore, runtime_config: RuntimeConfig) -> Router {
+    let update_tokens = UpdateTokenStore::with_ttl(update_token_ttl_secs(&runtime_config.test));
     let state = AppState {
         store,
         config: runtime_config,
-        update_tokens: UpdateTokenStore::default(),
+        update_tokens,
     };
     Router::new()
         .route("/", get(index))
@@ -222,10 +231,21 @@ async fn results(
     })?))
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct UpdateTokenStore {
     tokens: Arc<Mutex<HashMap<i64, PendingUpdateToken>>>,
     sequence: Arc<AtomicU64>,
+    ttl_secs: i64,
+}
+
+impl Default for UpdateTokenStore {
+    fn default() -> Self {
+        Self {
+            tokens: Arc::default(),
+            sequence: Arc::default(),
+            ttl_secs: 30,
+        }
+    }
 }
 
 struct PendingUpdateToken {
@@ -234,6 +254,13 @@ struct PendingUpdateToken {
 }
 
 impl UpdateTokenStore {
+    fn with_ttl(ttl_secs: i64) -> Self {
+        Self {
+            ttl_secs,
+            ..Self::default()
+        }
+    }
+
     fn create(&self, id: i64) -> String {
         let mut tokens = self.tokens.lock().expect("更新令牌锁不应损坏");
         Self::cleanup_expired_locked(&mut tokens);
@@ -242,7 +269,7 @@ impl UpdateTokenStore {
             id,
             PendingUpdateToken {
                 token: token.clone(),
-                expires_at: Utc::now() + Duration::seconds(IN_MEMORY_UPDATE_TOKEN_TTL_SECS),
+                expires_at: Utc::now() + Duration::seconds(self.ttl_secs),
             },
         );
         token
@@ -1969,6 +1996,38 @@ mod tests {
                 && html.contains("margin-left: auto;"),
             "抖动说明和下载状态说明应共享相同行高和右贴齐盒模型"
         );
+    }
+
+    #[test]
+    fn update_token_ttl_should_cover_longest_save_interval_with_margin() {
+        // 120s 测速 + 30% 保存比例时，中段到最终保存间隔约 84s，TTL 乘 1.2 留余量后向上取整为 101s。
+        let test = crate::config::TestSettings {
+            latency_rounds: 5,
+            latency_timeout_ms: 3500,
+            download_test_ms: 120_000,
+            download_file_path: "/speed.bin".to_string(),
+            progress_save_ratio: 0.3,
+        };
+
+        let ttl = super::update_token_ttl_secs(&test);
+
+        assert_eq!(ttl, 101);
+    }
+
+    #[test]
+    fn update_token_ttl_should_follow_short_test_interval() {
+        // 1s 测速 + 95% 保存比例时间隔仅 50ms，TTL 直接按公式向上取整为 1s，不再套用固定底线。
+        let test = crate::config::TestSettings {
+            latency_rounds: 5,
+            latency_timeout_ms: 3500,
+            download_test_ms: 1_000,
+            download_file_path: "/speed.bin".to_string(),
+            progress_save_ratio: 0.95,
+        };
+
+        let ttl = super::update_token_ttl_secs(&test);
+
+        assert_eq!(ttl, 1);
     }
 
     #[test]

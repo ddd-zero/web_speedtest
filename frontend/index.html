@@ -2175,7 +2175,7 @@
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
-        await finalizeResult(targetKey, finalSpeed, savedRecord).catch(() => null);
+        await finalizeResult(targetKey, finalSpeed, savedRecord, Boolean(savePromise)).catch(() => null);
         markDownloadCompleted(targetKey, finalSpeed, receivedBytes);
       } catch (error) {
         const message = state.stopRequested
@@ -2187,7 +2187,7 @@
         if (savePromise) {
           savedRecord = await savePromise.catch(() => null);
         }
-        await finalizeResult(targetKey, stableSpeed(speedSamples), savedRecord).catch(() => null);
+        await finalizeResult(targetKey, stableSpeed(speedSamples), savedRecord, Boolean(savePromise)).catch(() => null);
         markDownloadFailed(targetKey, stableSpeed(speedSamples), receivedBytes, message);
       } finally {
         controller.abort();
@@ -2209,7 +2209,12 @@
       return saveResult(buildResultPayload(targetKey, speed, false));
     }
 
-    async function finalizeResult(targetKey, speed, savedRecord) {
+    async function finalizeResult(targetKey, speed, savedRecord, progressSaveAttempted) {
+      // 中段保存已发出但没拿到响应：服务端可能已经插入过这条记录，
+      // 此时再 INSERT 会产生重复记录，因此直接跳过最终保存。
+      if (progressSaveAttempted && !savedRecord) {
+        return;
+      }
       const payload = buildResultPayload(targetKey, speed, true);
       if (savedRecord) {
         payload.id = savedRecord.id;
