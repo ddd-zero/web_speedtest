@@ -155,6 +155,74 @@ jobs:
             exit 1
           fi
 
+      - name: 生成更新日志
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # 定位上一个版本 tag（按可达性，自动跳过缺号的版本）
+          prev_tag="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)"
+          if [[ -n "${prev_tag}" ]]; then
+            range="${prev_tag}..${RELEASE_TAG}"
+            echo "对比区间: ${range}"
+          else
+            range="${RELEASE_TAG}"
+            echo "未找到上一个 tag，收录全部历史"
+          fi
+
+          # 收集提交（哈希|主题），排除合并提交
+          mapfile -t commits < <(git log "${range}" --no-merges --pretty=format:'%h|%s')
+
+          feats=()
+          fixes=()
+          others=()
+          for line in "${commits[@]}"; do
+            hash="${line%%|*}"
+            subj="${line#*|}"
+            # 跳过纯版本提交（Build vX / Release Build vX）
+            if [[ "${subj}" =~ ^(Release[[:space:]]+)?Build[[:space:]]+v[0-9] ]]; then
+              continue
+            fi
+            case "${subj}" in
+              feat:*|feat：*)
+                body="${subj#feat}"; body="${body#:}"; body="${body#：}"; feats+=("- ${body# } (${hash})");;
+              fix:*|fix：*)
+                body="${subj#fix}"; body="${body#:}"; body="${body#：}"; fixes+=("- ${body# } (${hash})");;
+              other:*|other：*)
+                body="${subj#other}"; body="${body#:}"; body="${body#：}"; others+=("- ${body# } (${hash})");;
+              *)
+                others+=("- ${subj} (${hash})");;
+            esac
+          done
+
+          {
+            echo "## ${RELEASE_TAG} 更新内容"
+            echo ""
+            if [[ ${#feats[@]} -gt 0 ]]; then
+              echo "### ✨ 新功能"
+              printf '%s\n' "${feats[@]}"
+              echo ""
+            fi
+            if [[ ${#fixes[@]} -gt 0 ]]; then
+              echo "### 🐛 问题修复"
+              printf '%s\n' "${fixes[@]}"
+              echo ""
+            fi
+            if [[ ${#others[@]} -gt 0 ]]; then
+              echo "### 🔧 其他改动"
+              printf '%s\n' "${others[@]}"
+              echo ""
+            fi
+            if [[ -n "${prev_tag}" ]]; then
+              echo "**完整变更**: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${prev_tag}...${RELEASE_TAG}"
+            fi
+          } > release_notes.md
+
+          echo "----- 生成的更新日志 -----"
+          cat release_notes.md
+
       - name: 创建或更新 Release
         shell: bash
         env:
@@ -175,7 +243,8 @@ jobs:
           done
 
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" --notes-file release_notes.md
             gh release upload "${RELEASE_TAG}" "${ordered_files[@]}" --clobber
           else
-            gh release create "${RELEASE_TAG}" "${ordered_files[@]}" --title "${RELEASE_TAG}" --generate-notes --target "${GITHUB_SHA}"
+            gh release create "${RELEASE_TAG}" "${ordered_files[@]}" --title "${RELEASE_TAG}" --notes-file release_notes.md --target "${GITHUB_SHA}"
           fi
