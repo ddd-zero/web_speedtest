@@ -56,16 +56,19 @@ jobs:
         with:
           key: linux-amd64-${{ matrix.artifact }}
 
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
       - name: 安装 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: 安装前端处理依赖
         shell: bash
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: 安装 musl 编译依赖
         shell: bash
@@ -76,7 +79,7 @@ jobs:
 
       - name: 处理内嵌前端页面
         shell: bash
-        run: npm run process:index
+        run: pnpm run process:index
 
       - name: 编译并打包
         shell: bash
